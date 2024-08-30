@@ -1,6 +1,7 @@
 const { app, BrowserWindow, clipboard} = require('electron')
 const {join} = require("node:path");
 const {writeFileSync, readFileSync, existsSync} = require("node:fs");
+const crypto = require('crypto');
 
 function getUnion(rect1, rect2) {
     // Determine the minimum x and y values
@@ -32,9 +33,16 @@ if (!arg) {
 let completeSource;
 if (existsSync(arg)) {
     completeSource = readFileSync(arg).toString();
+
 } else {
     console.log("Cannot find file " + arg);
     app.exit(-1);
+}
+const destFilename = 'strype-' + crypto.createHash('md5').update(completeSource).digest('hex') + '.png';
+
+if (existsSync(destFilename)) {
+    console.log("File already exists, not regenerating.");
+    app.exit(1);
 }
 
 const allLines = completeSource.split(/\r?\n/);
@@ -149,8 +157,7 @@ app.on('ready', async () => {
                     if (defs) boundsToUse.push(defsBounds);
                     if (main) boundsToUse.push(mainBounds);
                     testWin.webContents.capturePage(boundsToUse.reduce(getUnion)).then((img) => {
-                        const previewImgUrl = 'output.png';
-                        writeFileSync(previewImgUrl, img.toPNG());
+                        writeFileSync(destFilename, img.toPNG());
                         testWin.close();
                         // Exit forces it (unlike quit):
                         app.exit();
