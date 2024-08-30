@@ -4,7 +4,7 @@ const {writeFileSync} = require("node:fs");
 
 const zoom = 2.5;
 
-app.on('ready', () => {
+app.on('ready', async () => {
     const testWin = new BrowserWindow({
         width: 1920,
         height: 1080,
@@ -16,16 +16,37 @@ app.on('ready', () => {
         },
     });
 
-    testWin.loadURL("https://strype.org/editor/");
+    // Must get rid of old data to revert to basic project:
+    await testWin.webContents.session.clearCache(function(){});
+    await testWin.webContents.session.clearStorageData();
+
+
+    function sendKey(entry, delay)
+    {
+        ["keyDown", "keyUp"].forEach(async(type) =>
+        {
+            entry.type = type;
+            testWin.webContents.sendInputEvent(entry);
+
+            // Delay
+            await new Promise(resolve => setTimeout(resolve, delay));
+        });
+    }
+
+    const {clipboard} = require('electron');
+    clipboard.writeText('x = 10');
+
+    await testWin.loadURL("https://strype.org/editor/");
     testWin.webContents.on('did-stop-loading', async() => {
         testWin.webContents.setZoomFactor(zoom);
-        // Need to wait for re-render after adjusting zoom:
+        sendKey({keyCode: "v", modifiers: ["Ctrl"]});
+        // Need to wait for re-render after adjusting zoom and sending paste:
         setTimeout(function() {
             Promise.all([
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-2').getBoundingClientRect().x"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-2').getBoundingClientRect().y"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-2').getBoundingClientRect().width"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-2').getBoundingClientRect().height")
+                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-3').getBoundingClientRect().x"),
+                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-3').getBoundingClientRect().y"),
+                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-3').getBoundingClientRect().width"),
+                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-3').getBoundingClientRect().height")
             ])
                 .then((bounds) => {
                     console.log("Bounds: " + JSON.stringify(bounds));
@@ -40,6 +61,6 @@ app.on('ready', () => {
                         testWin.close();
                     });
                 });
-        }, 500);
+        }, 2000);
     });
 });
