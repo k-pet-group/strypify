@@ -39,7 +39,10 @@ app.on('ready', async () => {
     await testWin.loadURL("https://strype.org/editor/");
     testWin.webContents.on('did-stop-loading', async() => {
         testWin.webContents.setZoomFactor(zoom);
-        sendKey({keyCode: "v", modifiers: ["Ctrl"]});
+        sendKey({keyCode: "Delete"}, 100);
+        sendKey({keyCode: "Delete"}, 100);
+        await testWin.webContents.executeJavaScript("document.execCommand('paste');");
+
         // Need to wait for re-render after adjusting zoom and sending paste:
         setTimeout(function() {
             Promise.all([
