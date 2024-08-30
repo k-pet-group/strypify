@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "cross-env ELECTRON_ENABLE_LOGGING=1 electron --trace-warnings . --file=example2.py"
+    "start": "cross-env ELECTRON_ENABLE_LOGGING=1 electron --trace-warnings . --file=example2.py",
+    "package": "electron-packager . strypify --overwrite"
   },
   "private": true,
   "devDependencies": {

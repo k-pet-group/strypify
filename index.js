@@ -26,7 +26,7 @@ const zoom = 2.5;
 
 let arg = app.commandLine.getSwitchValue("file");
 if (!arg) {
-    console.log("Must pass Python code as argument");
+    console.log("Must pass Python code as argument, e.g. --file=myfile.py (the equals is required)");
     app.exit(-1);
 }
 let completeSource;
@@ -149,7 +149,7 @@ app.on('ready', async () => {
                     if (defs) boundsToUse.push(defsBounds);
                     if (main) boundsToUse.push(mainBounds);
                     testWin.webContents.capturePage(boundsToUse.reduce(getUnion)).then((img) => {
-                        const previewImgUrl = join(__dirname, 'preview-capture-image.png');
+                        const previewImgUrl = 'output.png';
                         writeFileSync(previewImgUrl, img.toPNG());
                         testWin.close();
                         // Exit forces it (unlike quit):
