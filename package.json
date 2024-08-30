@@ -1,0 +1,14 @@
+{
+  "name": "python-to-strype-image",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "cross-env ELECTRON_ENABLE_LOGGING=1 electron --trace-warnings ."
+  },
+  "private": true,
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^32.0.1"
+  }
+}
