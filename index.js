@@ -52,7 +52,7 @@ app.on('ready', async () => {
                 testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-3').getBoundingClientRect().height")
             ])
                 .then((bounds) => {
-                    console.log("Bounds: " + JSON.stringify(bounds));
+                    //console.log("Bounds: " + JSON.stringify(bounds));
                     testWin.webContents.capturePage({
                         x: zoom * bounds[0],
                         y: zoom * bounds[1],
@@ -62,6 +62,8 @@ app.on('ready', async () => {
                         const previewImgUrl = join(__dirname, 'preview-capture-image.png');
                         writeFileSync(previewImgUrl, img.toPNG());
                         testWin.close();
+                        // Exit forces it (unlike quit):
+                        app.exit();
                     });
                 });
         }, 2000);
