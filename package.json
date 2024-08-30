@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "cross-env ELECTRON_ENABLE_LOGGING=1 electron --trace-warnings ."
+    "start": "cross-env ELECTRON_ENABLE_LOGGING=1 electron --trace-warnings . --file=example2.py"
   },
   "private": true,
   "devDependencies": {
