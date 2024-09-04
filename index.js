@@ -98,20 +98,20 @@ app.on('ready', async () => {
         sendKey({keyCode: "up"}, 100);
         if (imports) {
             clipboard.writeText(imports.filter(s => s.trim()).join('\n'));
-            console.log("Pasting imports: " + clipboard.readText());
+            //console.log("Pasting imports: " + clipboard.readText());
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
 
         }
         sendKey({keyCode: "down"}, 100);
         if (defs) {
             clipboard.writeText(defs.filter(s => s.trim()).join('\n'));
-            console.log("Pasting defs: " + clipboard.readText());
+            //console.log("Pasting defs: " + clipboard.readText());
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
         }
         sendKey({keyCode: "down"}, 100);
         if (main) {
             clipboard.writeText(main.join('\n'));
-            console.log("Pasting main: " + clipboard.readText());
+            //console.log("Pasting main: " + clipboard.readText());
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
         }
 
@@ -157,6 +157,7 @@ app.on('ready', async () => {
                     if (defs) boundsToUse.push(defsBounds);
                     if (main) boundsToUse.push(mainBounds);
                     testWin.webContents.capturePage(boundsToUse.reduce(getUnion)).then((img) => {
+                        console.log(destFilename);
                         writeFileSync(destFilename, img.toPNG());
                         testWin.close();
                         // Exit forces it (unlike quit):
