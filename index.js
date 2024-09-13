@@ -3,6 +3,8 @@ const {join} = require("node:path");
 const {writeFileSync, readFileSync, existsSync} = require("node:fs");
 const crypto = require('crypto');
 
+// Gets the union of the two rectangles, i.e. the smallest rectangle
+// that includes the full bounds of both the given rectangles.
 function getUnion(rect1, rect2) {
     // Determine the minimum x and y values
     const minX = Math.min(rect1.x, rect2.x);
@@ -23,7 +25,10 @@ function getUnion(rect1, rect2) {
     return unionRect;
 }
 
-const zoom = 2.5;
+let zoom = parseFloat(app.commandLine.getSwitchValue("zoom"));
+if (!zoom || isNaN(zoom)) {
+    zoom = 2.5;
+}
 
 let arg = app.commandLine.getSwitchValue("file");
 if (!arg) {
@@ -33,11 +38,12 @@ if (!arg) {
 let completeSource;
 if (existsSync(arg)) {
     completeSource = readFileSync(arg).toString();
-
 } else {
     console.log("Cannot find file " + arg);
     app.exit(-1);
 }
+// Filename is predetermined by the MD5 hash of the code.  This helps with caching the image to avoid
+// unnecessary regeneration.
 const destFilename = 'strype-' + crypto.createHash('md5').update(completeSource).digest('hex') + '.png';
 
 if (existsSync(destFilename)) {
@@ -50,7 +56,9 @@ const allLines = completeSource.split(/\r?\n/);
 // Find first zero-indent line that is not blank or import or def:
 let firstMain = allLines.findIndex(s => !s.match(/^(($)|(import\s+.*)|(from\s+.*)|(def\s+.*)|(#.*)|(\s+.*))/));
 // Also include preceding blanks and left-aligned comments:
-while (firstMain > 0 && allLines[firstMain - 1].match(/^((\s*$)|#.*)/)) {firstMain -= 1;}
+while (firstMain > 0 && allLines[firstMain - 1].match(/^((\s*$)|#.*)/)) {
+    firstMain -= 1;
+}
 const main = firstMain === -1 ? null : allLines.slice(firstMain);
 const lastImport = allLines.findLastIndex(s => s.match(/^((import\s+)|(from\s+))/));
 const imports = lastImport === -1 ? null : allLines.slice(0, lastImport + 1);
@@ -73,7 +81,6 @@ app.on('ready', async () => {
     await testWin.webContents.session.clearCache(function(){});
     await testWin.webContents.session.clearStorageData();
 
-
     function sendKey(entry, delay)
     {
         ["keyDown", "keyUp"].forEach(async(type) =>
@@ -86,12 +93,11 @@ app.on('ready', async () => {
         });
     }
 
-    const {clipboard} = require('electron');
-
 
     await testWin.loadURL("https://strype.org/test/editor/"); // TODO set back to main
     testWin.webContents.on('did-stop-loading', async() => {
         testWin.webContents.setZoomFactor(zoom);
+        // Clear current code and go up to imports:
         sendKey({keyCode: "Delete"}, 100);
         sendKey({keyCode: "Delete"}, 100);
         sendKey({keyCode: "up"}, 100);
@@ -115,9 +121,10 @@ app.on('ready', async () => {
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
         }
 
-
         // Need to wait for re-render after adjusting zoom and sending paste:
         setTimeout(function() {
+            // Could probably do this simpler, but had problems initially getting more complex objects
+            // back from executeJavaScript, so we do it one primitive number at a time:
             Promise.all([
                 testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-1').getBoundingClientRect().x"),
                 testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-1').getBoundingClientRect().y"),
@@ -157,10 +164,11 @@ app.on('ready', async () => {
                     if (defs) boundsToUse.push(defsBounds);
                     if (main) boundsToUse.push(mainBounds);
                     testWin.webContents.capturePage(boundsToUse.reduce(getUnion)).then((img) => {
+                        // If all goes well, we should only output this, the filename written to:
                         console.log(destFilename);
                         writeFileSync(destFilename, img.toPNG());
                         testWin.close();
-                        // Exit forces it (unlike quit):
+                        // Exit forces it (unlike app.quit):
                         app.exit();
                     });
                 });
