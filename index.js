@@ -65,15 +65,17 @@ const imports = lastImport === -1 ? null : allLines.slice(0, lastImport + 1);
 const defs = firstMain === lastImport + 1 ? null : allLines.slice(lastImport === -1 ? 0 : lastImport + 1, firstMain === -1 ? allLines.length : firstMain);
 
 app.on('ready', async () => {
+    const debugging = false;
     const testWin = new BrowserWindow({
         width: 1920,
         height: 1080 * 3,
         // Don't actually show the GUI (can toggle for debugging):
-        show: false,
+        show: debugging,
         webPreferences: {
             // Must turn off sandbox to be able to write image files:
             sandbox: false,
-            offscreen: true
+            // Also need to toggle for debugging:
+            offscreen: !debugging
         },
     });
 
@@ -81,16 +83,16 @@ app.on('ready', async () => {
     await testWin.webContents.session.clearCache(function(){});
     await testWin.webContents.session.clearStorageData();
 
-    function sendKey(entry, delay)
+    async function sendKey(entry, delay)
     {
-        ["keyDown", "keyUp"].forEach(async(type) =>
+        await Promise.all(["keyDown", "keyUp"].map(async(type) =>
         {
             entry.type = type;
             testWin.webContents.sendInputEvent(entry);
 
             // Delay
             await new Promise(resolve => setTimeout(resolve, delay));
-        });
+        }));
     }
 
 
@@ -98,23 +100,23 @@ app.on('ready', async () => {
     testWin.webContents.on('did-stop-loading', async() => {
         testWin.webContents.setZoomFactor(zoom);
         // Clear current code and go up to imports:
-        sendKey({keyCode: "Delete"}, 100);
-        sendKey({keyCode: "Delete"}, 100);
-        sendKey({keyCode: "up"}, 100);
-        sendKey({keyCode: "up"}, 100);
+        await sendKey({keyCode: "Delete"}, 100);
+        await sendKey({keyCode: "Delete"}, 100);
+        await sendKey({keyCode: "up"}, 100);
+        await sendKey({keyCode: "up"}, 100);
         if (imports) {
             clipboard.writeText(imports.filter(s => s.trim()).join('\n'));
             //console.log("Pasting imports: " + clipboard.readText());
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
 
         }
-        sendKey({keyCode: "down"}, 100);
+        await sendKey({keyCode: "down"}, 100);
         if (defs) {
             clipboard.writeText(defs.filter(s => s.trim()).join('\n'));
             //console.log("Pasting defs: " + clipboard.readText());
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
         }
-        sendKey({keyCode: "down"}, 100);
+        await sendKey({keyCode: "down"}, 100);
         if (main) {
             clipboard.writeText(main.join('\n'));
             //console.log("Pasting main: " + clipboard.readText());
@@ -126,18 +128,18 @@ app.on('ready', async () => {
             // Could probably do this simpler, but had problems initially getting more complex objects
             // back from executeJavaScript, so we do it one primitive number at a time:
             Promise.all([
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-1').getBoundingClientRect().x"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-1').getBoundingClientRect().y"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-1').getBoundingClientRect().width"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-1').getBoundingClientRect().height + 10"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-2').getBoundingClientRect().x"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-2').getBoundingClientRect().y"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-2').getBoundingClientRect().width"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-2').getBoundingClientRect().height + 10"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-3').getBoundingClientRect().x"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-3').getBoundingClientRect().y"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-3').getBoundingClientRect().width"),
-                testWin.webContents.executeJavaScript("document.getElementById('FrameContainer_-3').getBoundingClientRect().height - 190")
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().x"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().y"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().width"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().height + 10"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().x"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().y"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().width"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().height + 10"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().x"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().y"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().width"),
+                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().height - 190")
             ])
                 .then((allBounds) => {
                     //console.log("Bounds: " +
