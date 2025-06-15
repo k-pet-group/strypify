@@ -94,7 +94,7 @@ app.on('ready', async () => {
     }
 
 
-    await testWin.loadURL("https://strype.org/test/editor/"); // TODO set back to main
+    await testWin.loadURL("https://strype.org/editor/");
     testWin.webContents.on('did-stop-loading', async() => {
         testWin.webContents.setZoomFactor(zoom);
         // Clear current code and go up to imports:
