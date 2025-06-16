@@ -8,6 +8,26 @@ on:
       - 'index.js'
   workflow_dispatch:
 jobs:
+  Build-Windows-x64:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Install Node
+        uses: actions/setup-node@v4
+      - name: Build
+        run: npm run package
+      - name: Zip the directory
+        run: |
+          Compress-Archive -Path Strypify-win32-x64 -DestinationPath Strypify-win32-x64.zip
+        shell: powershell
+      - name: Archive Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: strypify-windows-x64
+          path: |
+            Strypify-win32-x64.zip
+
   Build-Mac-App-Aarch:
     runs-on: macos-latest
     steps:
