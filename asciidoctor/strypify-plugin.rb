@@ -1,6 +1,19 @@
 require 'digest/md5'
 require 'fileutils'
 require 'tempfile'
+require 'rbconfig'
+
+host_os = RbConfig::CONFIG['host_os']
+strypify_cmd = "Strypify"
+
+if host_os =~ /mswin|mingw|cygwin/
+  strypify_cmd = "Strypify.exe"
+elsif host_os =~ /darwin/
+  stryipfy_cmd = "/Applications/Strypify.app/Contents/MacOS/Strypify"
+elsif host_os =~ /linux/
+  strypify_cmd = "Strypify"
+end
+
 
 class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
   enable_dsl
@@ -23,12 +36,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
           file.close
 
           Dir.chdir(imageCacheDir){
-            if ENV['OS'] == 'Windows_NT'
-              # Assume it's on PATH:
-              %x(Strypify.exe --file=#{file.path})
-            else
-              %x(/Applications/Strypify.app/Contents/MacOS/Strypify --file=#{file.path})
-            end
+            %x(#{strypify_cmd} --file=#{file.path})
           }
         ensure
           file.delete
