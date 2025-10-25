@@ -1,11 +1,8 @@
 name: Build Apps
 on:
   push:
-    paths:
-      - '.github/workflows/build-app.yml'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'index.js'
+    branches:
+      - '*'
     tags:
       - 'v*'   # Runs when you push a version tag
 
