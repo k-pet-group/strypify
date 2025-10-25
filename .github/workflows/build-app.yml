@@ -58,6 +58,8 @@ jobs:
       #    # import certificate to keychain
       #    security import $CERTIFICATE_PATH -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
       #    security list-keychain -d user -s $KEYCHAIN_PATH
+      - name: Install dependencies
+        run: npm install
       - name: Build
         run: npm run package
       #- name: Sign
