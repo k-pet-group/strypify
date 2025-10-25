@@ -1,7 +1,11 @@
 const { app, BrowserWindow, clipboard} = require('electron')
-const {join} = require("node:path");
 const {writeFileSync, readFileSync, existsSync} = require("node:fs");
 const crypto = require('crypto');
+
+
+// Need to turn sandbox off, especially to allow running this inside Github Actions as we do for worksheets:
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-setuid-sandbox');
 
 // Gets the union of the two rectangles, i.e. the smallest rectangle
 // that includes the full bounds of both the given rectangles.
@@ -63,10 +67,6 @@ const main = firstMain === -1 ? null : allLines.slice(firstMain);
 const lastImport = allLines.findLastIndex(s => s.match(/^((import\s+)|(from\s+))/));
 const imports = lastImport === -1 ? null : allLines.slice(0, lastImport + 1);
 const defs = firstMain === lastImport + 1 ? null : allLines.slice(lastImport === -1 ? 0 : lastImport + 1, firstMain === -1 ? allLines.length : firstMain);
-
-// Need to turn sandbox off, especially to allow running this inside Github Actions as we do for worksheets:
-app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-setuid-sandbox');
 
 app.on('ready', async () => {
     const debugging = false;
