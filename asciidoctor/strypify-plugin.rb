@@ -5,9 +5,9 @@ require 'rbconfig'
 
 HOST_OS = RbConfig::CONFIG['host_os']
 STRYPIFY_CMD =
-  if host_os =~ /mswin|mingw|cygwin/
+  if HOST_OS =~ /mswin|mingw|cygwin/
     "Strypify.exe"
-  elsif host_os =~ /darwin/
+  elsif HOST_OS =~ /darwin/
     "/Applications/Strypify.app/Contents/MacOS/Strypify"
   else
     strypify_cmd = "Strypify"
