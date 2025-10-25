@@ -64,6 +64,10 @@ const lastImport = allLines.findLastIndex(s => s.match(/^((import\s+)|(from\s+))
 const imports = lastImport === -1 ? null : allLines.slice(0, lastImport + 1);
 const defs = firstMain === lastImport + 1 ? null : allLines.slice(lastImport === -1 ? 0 : lastImport + 1, firstMain === -1 ? allLines.length : firstMain);
 
+// Need to turn sandbox off, especially to allow running this inside Github Actions as we do for worksheets:
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-setuid-sandbox');
+
 app.on('ready', async () => {
     const debugging = false;
     const testWin = new BrowserWindow({
