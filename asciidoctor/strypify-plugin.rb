@@ -3,16 +3,15 @@ require 'fileutils'
 require 'tempfile'
 require 'rbconfig'
 
-host_os = RbConfig::CONFIG['host_os']
-strypify_cmd = "Strypify"
-
-if host_os =~ /mswin|mingw|cygwin/
-  strypify_cmd = "Strypify.exe"
-elsif host_os =~ /darwin/
-  stryipfy_cmd = "/Applications/Strypify.app/Contents/MacOS/Strypify"
-elsif host_os =~ /linux/
-  strypify_cmd = "Strypify"
-end
+HOST_OS = RbConfig::CONFIG['host_os']
+STRYPIFY_CMD =
+  if host_os =~ /mswin|mingw|cygwin/
+    "Strypify.exe"
+  elsif host_os =~ /darwin/
+    "/Applications/Strypify.app/Contents/MacOS/Strypify"
+  else
+    strypify_cmd = "Strypify"
+  end
 
 
 class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
@@ -36,7 +35,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
           file.close
 
           Dir.chdir(imageCacheDir){
-            %x(#{strypify_cmd} --file=#{file.path})
+            %x(#{STRYPIFY_CMD} --file=#{file.path})
           }
         ensure
           file.delete
