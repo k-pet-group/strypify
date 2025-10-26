@@ -10,7 +10,7 @@ STRYPIFY_CMD =
   elsif HOST_OS =~ /darwin/
     "/Applications/Strypify.app/Contents/MacOS/Strypify"
   else
-    strypify_cmd = "Strypify"
+    strypify_cmd = "strypify-headless.sh"
   end
 
 
@@ -35,7 +35,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
           file.close
 
           Dir.chdir(imageCacheDir){
-            %x(#{STRYPIFY_CMD} --file=#{file.path} --no-sandbox --disable-setuid-sandbox --force-color-profile=srgb)
+            %x(#{STRYPIFY_CMD} --file=#{file.path})
           }
         ensure
           file.delete
