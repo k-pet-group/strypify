@@ -144,7 +144,7 @@ jobs:
           # Suppress complains about dbus error:
           export DBUS_SESSION_BUS_ADDRESS=""
           # xargs trims whitespace:
-          FILE=$(xvfb-run ../artifact/Strypify-linux-x64/Strypify --file=$PYFILE --no-sandbox --disable-setuid-sandbox --disable-setuid-sandbox --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage --headless | xargs)
+          FILE=$(xvfb-run ../artifact/Strypify-linux-x64/Strypify --file=$PYFILE --no-sandbox --disable-setuid-sandbox --disable-setuid-sandbox --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage --headless --disable-features=UseOzonePlatform --use-gl=swiftshader | xargs)
           EXPECTEDFILE="expected-${PYFILE%.py}.png"
           if [ ! -f "$FILE" ]; then
             echo "Image $FILE does not exist!"
