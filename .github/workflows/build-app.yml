@@ -156,6 +156,13 @@ jobs:
           export EXPECTEDFILE
           python3 run-test.py
         done
+    - name: Upload generated images if tests failed
+      if: failure()  # only runs if previous step failed
+      uses: actions/upload-artifact@v4
+      with:
+        name: failed-images
+        path: 'test/strype*.png'
+
 
   Release:
     runs-on: ubuntu-latest
