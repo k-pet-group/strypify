@@ -35,7 +35,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
           file.close
 
           Dir.chdir(imageCacheDir){
-            %x(#{STRYPIFY_CMD} --file=#{file.path} --no-sandbox --disable-setuid-sandbox)
+            %x(#{STRYPIFY_CMD} --file=#{file.path} --no-sandbox --disable-setuid-sandbox --force-color-profile=srgb)
           }
         ensure
           file.delete
