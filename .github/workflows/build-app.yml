@@ -139,7 +139,7 @@ jobs:
       working-directory: test
       run: |
         for PYFILE in example*.py; do
-          FILE=`xvfb-run ./artifact/Strypify-linux-x64/Strypify --file $PYFILE --no-sandbox --disable-setuid-sandbox`
+          FILE=`xvfb-run ../artifact/Strypify-linux-x64/Strypify --file $PYFILE --no-sandbox --disable-setuid-sandbox`
           EXPECTEDFILE="expected-${PYFILE%.py}.png"
           if [ ! -f $FILE ]; then
             echo "Image $FILE does not exist!"
