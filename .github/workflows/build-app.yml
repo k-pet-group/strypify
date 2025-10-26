@@ -26,7 +26,7 @@ jobs:
       - name: Archive Windows build
         uses: actions/upload-artifact@v4
         with:
-          name: strypify-windows-x64
+          name: Strypify-windows-x64
           path: |
             Strypify-win32-x64.zip
 
@@ -78,7 +78,7 @@ jobs:
       - name: Archive Mac build
         uses: actions/upload-artifact@v4
         with:
-          name: strypify-mac-aarch
+          name: Strypify-mac-aarch
           path: |
             Strypify.zip
 
@@ -99,7 +99,7 @@ jobs:
       - name: Archive Linux build
         uses: actions/upload-artifact@v4
         with:
-          name: strypify-linux-x64
+          name: Strypify-linux-x64
           path: |
             Strypify-linux-x64.zip
       - name: Archive Asciidoctor plugin
@@ -109,13 +109,72 @@ jobs:
           path: |
             asciidoctor/strypify-plugin.rb            
 
-  release:
+  Test:
+    runs-on: ubuntu-latest
+    needs: Build-Ubuntu-x64
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download Strypify artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: Strypify-linux-x64
+        path: ./artifact
+
+    - name: Unzip Strypify
+      run: unzip artifact/Strypify-linux-x64.zip -d ./artifact
+
+    - name: Ensure Strypify is executable
+      run: chmod +x ./artifact/Strypify-linux-x64/Strypify
+
+    - name: Install Xvfb and Python
+      run: |
+        sudo apt install xvfb
+        python3 -m pip install --upgrade pip
+        pip install Pillow
+
+    - name: Run Strypify and check image
+      shell: bash
+      run: |
+        for PYFILE in example*.py; do
+          FILE=`xvfb-run ./artifact/Strypify-linux-x64/Strypify --file $PYFILE --no-sandbox --disable-setuid-sandbox`
+          EXPECTEDFILE="expected-${PYFILE%.py}.png"
+          if [ ! -f $FILE ]; then
+            echo "Image $FILE does not exist!"
+            exit 1
+          fi
+          python3 - <<'EOF'
+          from PIL import Image, ImageChops
+          import math, operator, os
+          
+          def rmsdiff(im1, im2):
+              "Calculate the root-mean-square difference between two images"
+              h = ImageChops.difference(im1, im2).histogram()
+              sq = (value*((idx%256)**2) for idx, value in enumerate(h))
+              sum_of_squares = sum(sq)
+              rms = math.sqrt(sum_of_squares / (im1.size[0] * im1.size[1]))
+              return rms
+          
+          im1 = Image.open(os.environ('FILE')).convert("RGB")
+          im2 = Image.open(os.environ('EXPECTEDFILE')).convert("RGB")
+          
+          tolerance = 10  # Adjust RMS tolerance
+          diff = rmsdiff(im1, im2)
+          print(f"RMS difference: {diff}")
+          if diff > tolerance:
+              raise Exception(f"Image is too different from expected (tolerance {tolerance})")
+          EOF
+        done
+
+  Release:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')   # only run for version tags
     needs:
       - Build-Windows-x64
       - Build-Ubuntu-x64
       - Build-Mac-App-Aarch
+      - Test
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4
