@@ -152,6 +152,8 @@ jobs:
             exit 1
           fi
           echo Comparing $FILE to $EXPECTEDFILE
+          export FILE
+          export EXPECTEDFILE
           python3 run-test.py
         done
 
