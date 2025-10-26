@@ -1,0 +1,3 @@
+#! /bin/bash
+
+xvfb-run Strypify $* --no-sandbox --disable-setuid-sandbox --disable-setuid-sandbox --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage --headless --disable-features=UseOzonePlatform --use-gl=swiftshader 3>&1 > /dev/null 2>&1

@@ -1,5 +1,5 @@
 const { app, BrowserWindow, clipboard} = require('electron')
-const {readFileSync, existsSync} = require("node:fs");
+const {writeSync, readFileSync, existsSync} = require("node:fs");
 const crypto = require('crypto');
 const sharp = require('sharp');
 
@@ -247,8 +247,8 @@ app.on('ready', async () => {
                         let totalRect = boundsToUse.reduce(getUnion);
                         //console.log("Capture: " + JSON.stringify(totalRect));
                         captureRect(testWin, integerRect(totalRect), zoom, destFilename).then(() => {
-                            // If all goes well, we should only output this, the filename written to:
-                            console.log(destFilename);
+                            // If all goes well, we should  output this, the filename written to, on FD 3:
+                            writeSync(3, destFilename);
                             testWin.close();
                             // Exit forces it (unlike app.quit):
                             app.exit();

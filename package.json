@@ -6,6 +6,7 @@
   "scripts": {
     "start": "cross-env ELECTRON_ENABLE_LOGGING=1 electron --trace-warnings . --file=example2.py",
     "package": "npx electron-packager . Strypify --overwrite",
+    "packageLinux": "npx electron-packager . Strypify --overwrite --extra-resource=strypify-headless.sh",
     "sign": "npx electron-osx-sign Strypify-darwin-arm64/Strypify.app  --version=32.0.1"
   },
   "private": true,

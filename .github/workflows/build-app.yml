@@ -92,7 +92,9 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Build
-        run: npm run package
+        run: |
+          chmod +x strypify-headless.sh
+          npm run packageLinux
       - name: Zip the directory
         run: |
           zip -r Strypify-linux-x64.zip Strypify-linux-x64
@@ -139,12 +141,10 @@ jobs:
       working-directory: test
       run: |
         ls -lrt ../artifact/Strypify-linux-x64/
+        export PATH=../artifact/Strypify-linux-x64/:$PATH
         for PYFILE in example*.py; do
           echo Testing: $PYFILE
-          # Suppress complains about dbus error:
-          export DBUS_SESSION_BUS_ADDRESS=""
-          # xargs trims whitespace:
-          FILE=$(xvfb-run ../artifact/Strypify-linux-x64/Strypify --file=$PYFILE --no-sandbox --disable-setuid-sandbox --disable-setuid-sandbox --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage --headless --disable-features=UseOzonePlatform --use-gl=swiftshader | xargs)
+          FILE=$(strypify-headless.sh --file=$PYFILE)
           EXPECTEDFILE="expected-${PYFILE%.py}.png"
           if [ ! -f "$FILE" ]; then
             echo "Image $FILE does not exist!"
