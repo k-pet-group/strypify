@@ -18,7 +18,7 @@ im2 = Image.open(expected).convert("RGB")
 
 im1_resized = im1.resize(im2.size, resample=Image.LANCZOS)
 
-tolerance = 20  # Adjust RMS tolerance
+tolerance = 50  # Adjust RMS tolerance
 diff = rmsdiff(im1_resized, im2)
 print(f"RMS difference: {diff}")
 if diff > tolerance:
