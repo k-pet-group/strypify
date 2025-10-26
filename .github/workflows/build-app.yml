@@ -141,6 +141,8 @@ jobs:
         ls -lrt ../artifact/Strypify-linux-x64/
         for PYFILE in example*.py; do
           echo Testing: $PYFILE
+          # Suppress complains about dbus error:
+          export DBUS_SESSION_BUS_ADDRESS=""
           # xargs trims whitespace:
           FILE=$(xvfb-run ../artifact/Strypify-linux-x64/Strypify --file=$PYFILE --no-sandbox --disable-setuid-sandbox | xargs)
           EXPECTEDFILE="expected-${PYFILE%.py}.png"
