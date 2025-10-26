@@ -151,6 +151,7 @@ jobs:
             echo "Image $FILE does not exist!"
             exit 1
           fi
+          echo Comparing $FILE to $EXPECTEDFILE
           python3 run-test.py
         done
 
