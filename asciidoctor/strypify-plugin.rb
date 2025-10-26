@@ -20,12 +20,14 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
   positional_attributes 'language'
 
   def process parent, reader, attrs
-    imageCacheDir = '.image-cache'
+    # Must put image cache inside output dir so relative paths work:
+    imageCacheDirName = '.image-cache'
+    imageCacheDirPath = File.join(parent.document.attr('outdir'), imageCacheDir)
     src = reader.readlines.join("\n")
-    unless File.directory?(imageCacheDir)
-      FileUtils.mkdir_p(imageCacheDir)
+    unless File.directory?(imageCacheDirPath)
+      FileUtils.mkdir_p(imageCacheDirPath)
     end
-    filename = "#{imageCacheDir}/strype-#{Digest::MD5.hexdigest(src)}.png"
+    filename = "#{imageCacheDirName}/strype-#{Digest::MD5.hexdigest(src)}.png"
     imgAttr = {}
     imgAttr["target"] = filename
     if not File.file?(filename)
@@ -34,7 +36,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
           file.write src
           file.close
 
-          Dir.chdir(imageCacheDir){
+          Dir.chdir(imageCacheDirPath){
             %x(#{STRYPIFY_CMD} --file=#{file.path})
           }
         ensure
