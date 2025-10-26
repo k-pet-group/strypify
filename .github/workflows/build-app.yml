@@ -138,7 +138,9 @@ jobs:
       shell: bash
       working-directory: test
       run: |
+        ls -lrt ../artifact/Strypify-linux-x64/
         for PYFILE in example*.py; do
+          echo Testing: $PYFILE
           FILE=`xvfb-run ../artifact/Strypify-linux-x64/Strypify --file $PYFILE --no-sandbox --disable-setuid-sandbox`
           EXPECTEDFILE="expected-${PYFILE%.py}.png"
           if [ ! -f $FILE ]; then
