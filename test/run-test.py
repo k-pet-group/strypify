@@ -9,8 +9,12 @@ def rmsdiff(im1, im2):
     rms = math.sqrt(sum_of_squares / (im1.size[0] * im1.size[1]))
     return rms
 
-im1 = Image.open(os.environ('FILE')).convert("RGB")
-im2 = Image.open(os.environ('EXPECTEDFILE')).convert("RGB")
+
+actual = os.environ('FILE')
+expected = os.environ('EXPECTEDFILE')
+print("Comparing " + actual + " to " + expected)
+im1 = Image.open(actual).convert("RGB")
+im2 = Image.open(expected).convert("RGB")
 
 tolerance = 10  # Adjust RMS tolerance
 diff = rmsdiff(im1, im2)
