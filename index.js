@@ -1,14 +1,7 @@
 const { app, BrowserWindow, clipboard} = require('electron')
-const {writeFileSync, readFileSync, existsSync} = require("node:fs");
+const {readFileSync, existsSync} = require("node:fs");
 const crypto = require('crypto');
-
-// Need to turn sandbox off, especially to allow running this inside Github Actions as we do for worksheets:
-app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-setuid-sandbox');
-app.commandLine.appendSwitch('headless');
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-dev-shm-usage');
+const sharp = require('sharp');
 
 // Gets the union of the two rectangles, i.e. the smallest rectangle
 // that includes the full bounds of both the given rectangles.
@@ -31,6 +24,80 @@ function getUnion(rect1, rect2) {
 
     return unionRect;
 }
+
+function integerRect(rect) {
+    const x1 = Math.floor(rect.x);
+    const y1 = Math.floor(rect.y);
+    const x2 = Math.ceil(rect.x + rect.width);
+    const y2 = Math.ceil(rect.y + rect.height);
+
+    return {
+        x: x1,
+        y: y1,
+        width: x2 - x1,
+        height: y2 - y1
+    };
+}
+
+async function captureRect(win, rect, zoom, outputFile) {
+    const wc = win.webContents;
+
+    // The rect coordinates are in device pixels.
+
+    // Get viewport size, minus a little tolerance:
+    let { innerWidth: viewportWidth, innerHeight: viewportHeight } =
+        await wc.executeJavaScript(`({ innerWidth: Math.ceil(window.innerWidth - 5), innerHeight: Math.ceil(window.innerHeight - 5)})`);
+
+    // We convert the viewport from CSS pixels into device pixels:
+    viewportWidth = viewportWidth * zoom;
+    viewportHeight = viewportHeight * zoom;
+
+    const chunks = [];
+
+    // Divide rectangle into vertical chunks
+    const captureWidth = Math.min(viewportWidth, rect.width);
+    for (let offsetY = 0; offsetY < rect.height; offsetY += viewportHeight) {
+        // targetScrollY is device pixels:
+        const targetScrollY = rect.y + offsetY;
+        const captureHeight = Math.min(viewportHeight, rect.height - offsetY);
+
+        //console.log("Capturing chunk Y: " + targetScrollY + "+" + captureHeight, " with X: " + rect.x + "+" + rect.width + " and viewportSize: " + viewportWidth + " x " + viewportHeight);
+
+        // Scroll to the vertical position (converting back into CSS Pixels)
+        await wc.executeJavaScript(`document.getElementById("editorCodeDiv").scrollTo(0, ${targetScrollY / zoom})`);
+        await new Promise(resolve => setTimeout(resolve, 200)); // allow rendering
+
+        const actualScrollY = await wc.executeJavaScript("document.getElementById('editorCodeDiv').scrollTop") * zoom;
+
+        //console.log("Target scroll: " + targetScrollY + " actual: " + actualScrollY);
+
+        // Capture visible viewport
+        const image = await wc.capturePage({
+            x: rect.x,
+            // Adjust if we didn't scroll as far down as we wanted:
+            y: 0 + (targetScrollY - actualScrollY),
+            width: captureWidth,
+            height: captureHeight
+        });
+
+        chunks.push({ buffer: image.toPNG(), offsetY });
+    }
+
+    // Stitch chunks vertically
+    let composite = sharp({
+        create: {
+            width: captureWidth,
+            height: rect.height,
+            channels: 4,
+            background: { r: 255, g: 255, b: 255, alpha: 0 }
+        }
+    });
+
+    await composite.composite(
+        chunks.map(chunk => ({ input: chunk.buffer, top: chunk.offsetY, left: 0 }))
+    ).toFile(outputFile);
+}
+
 
 let zoom = parseFloat(app.commandLine.getSwitchValue("zoom"));
 if (!zoom || isNaN(zoom)) {
@@ -132,55 +199,62 @@ app.on('ready', async () => {
 
         // Need to wait for re-render after adjusting zoom and sending paste:
         setTimeout(function() {
-            // Could probably do this simpler, but had problems initially getting more complex objects
-            // back from executeJavaScript, so we do it one primitive number at a time:
-            Promise.all([
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().x"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().y"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().width"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().height + 10"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().x"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().y"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().width"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().height + 10"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().x"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().y"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().width"),
-                testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().height - 190")
-            ])
-                .then((allBounds) => {
-                    //console.log("Bounds: " +
-                    const importBounds = {
-                        x: zoom * allBounds[0],
-                        y: zoom * allBounds[1],
-                        width: zoom * allBounds[2],
-                        height: zoom * allBounds[3]
-                    };
-                    const defsBounds = {
-                        x: zoom * allBounds[4],
-                        y: zoom * allBounds[5],
-                        width: zoom * allBounds[6],
-                        height: zoom * allBounds[7]
-                    };
-                    const mainBounds = {
-                        x: zoom * allBounds[8],
-                        y: zoom * allBounds[9],
-                        width: zoom * allBounds[10],
-                        height: zoom * allBounds[11]
-                    };
-                    let boundsToUse = [];
-                    if (imports) boundsToUse.push(importBounds);
-                    if (defs) boundsToUse.push(defsBounds);
-                    if (main) boundsToUse.push(mainBounds);
-                    testWin.webContents.capturePage(boundsToUse.reduce(getUnion)).then((img) => {
-                        // If all goes well, we should only output this, the filename written to:
-                        console.log(destFilename);
-                        writeFileSync(destFilename, img.toPNG());
-                        testWin.close();
-                        // Exit forces it (unlike app.quit):
-                        app.exit();
+            // Scroll to top of page:
+            testWin.webContents.executeJavaScript(`document.getElementById("editorCodeDiv").scrollTo(0, 0)`)
+                .then(() =>new Promise(resolve => setTimeout(resolve, 200)))// allow rendering
+                .then(() => {
+
+                // Could probably do this simpler, but had problems initially getting more complex objects
+                // back from executeJavaScript, so we do it one primitive number at a time:
+                Promise.all([
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().x"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().y"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().width"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().height + 10"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().x"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().y"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().width"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().height + 10"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().x"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().y"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().width"),
+                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().height - 190")
+                ])
+                    .then((allBounds) => {
+                        //console.log("Bounds: " + JSON.stringify(allBounds));
+                        const importBounds = {
+                            x: zoom * allBounds[0],
+                            y: zoom * allBounds[1],
+                            width: zoom * allBounds[2],
+                            height: zoom * allBounds[3]
+                        };
+                        const defsBounds = {
+                            x: zoom * allBounds[4],
+                            y: zoom * allBounds[5],
+                            width: zoom * allBounds[6],
+                            height: zoom * allBounds[7]
+                        };
+                        const mainBounds = {
+                            x: zoom * allBounds[8],
+                            y: zoom * allBounds[9],
+                            width: zoom * allBounds[10],
+                            height: zoom * allBounds[11]
+                        };
+                        let boundsToUse = [];
+                        if (imports) boundsToUse.push(importBounds);
+                        if (defs) boundsToUse.push(defsBounds);
+                        if (main) boundsToUse.push(mainBounds);
+                        let totalRect = boundsToUse.reduce(getUnion);
+                        //console.log("Capture: " + JSON.stringify(totalRect));
+                        captureRect(testWin, integerRect(totalRect), zoom, destFilename).then(() => {
+                            // If all goes well, we should only output this, the filename written to:
+                            console.log(destFilename);
+                            testWin.close();
+                            // Exit forces it (unlike app.quit):
+                            app.exit();
+                        });
                     });
-                });
+            });
         }, 2000);
     });
 });

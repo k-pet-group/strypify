@@ -1,6 +1,6 @@
 {
   "name": "python-to-strype-image",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -15,5 +15,8 @@
     "@electron/packager": "^18.3.5",
     "cross-env": "^7.0.3",
     "electron": "^32.0.1"
+  },
+  "dependencies": {
+    "sharp": "^0.34.4"
   }
 }
