@@ -93,8 +93,9 @@ jobs:
         run: npm install
       - name: Build
         run: |
+          npm run package
           chmod +x strypify-headless.sh
-          npm run packageLinux
+          cp strypify-headless.sh Strypify-linux-x64/
       - name: Zip the directory
         run: |
           zip -r Strypify-linux-x64.zip Strypify-linux-x64
