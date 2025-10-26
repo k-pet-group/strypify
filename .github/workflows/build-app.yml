@@ -141,9 +141,10 @@ jobs:
         ls -lrt ../artifact/Strypify-linux-x64/
         for PYFILE in example*.py; do
           echo Testing: $PYFILE
-          FILE=`xvfb-run ../artifact/Strypify-linux-x64/Strypify --file=$PYFILE --no-sandbox --disable-setuid-sandbox`
+          # xargs trims whitespace:
+          FILE=$(xvfb-run ../artifact/Strypify-linux-x64/Strypify --file=$PYFILE --no-sandbox --disable-setuid-sandbox | xargs)
           EXPECTEDFILE="expected-${PYFILE%.py}.png"
-          if [ ! -f $FILE ]; then
+          if [ ! -f "$FILE" ]; then
             echo "Image $FILE does not exist!"
             exit 1
           fi
