@@ -22,7 +22,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
   def process parent, reader, attrs
     # Must put image cache inside output dir so relative paths work:
     imageCacheDirName = '.image-cache'
-    imageCacheDirPath = File.join(parent.document.attr('outdir'), imageCacheDir)
+    imageCacheDirPath = File.join(parent.document.attr('outdir'), imageCacheDirName)
     src = reader.readlines.join("\n")
     unless File.directory?(imageCacheDirPath)
       FileUtils.mkdir_p(imageCacheDirPath)
