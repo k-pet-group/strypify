@@ -80,7 +80,14 @@ async function captureRect(win, rect, zoom, outputFile) {
             height: captureHeight
         });
 
-        chunks.push({ buffer: image.toPNG(), offsetY });
+        //console.log("Chunk size: " + captureWidth + " x " + captureHeight + " @ " + offsetY);
+
+        let buffer = image.toPNG();
+        // Cancel any Mac High-DPI:
+        buffer = await sharp(buffer)
+            .resize(captureWidth, captureHeight, { fit: 'fill' })
+            .toBuffer();
+        chunks.push({ buffer: buffer, offsetY });
     }
 
     // Stitch chunks vertically
@@ -92,6 +99,14 @@ async function captureRect(win, rect, zoom, outputFile) {
             background: { r: 255, g: 255, b: 255, alpha: 0 }
         }
     });
+
+    //console.log("Composite size: " + captureWidth + " x " + rect.height);
+    //const [baseMeta, chunkMeta] = await Promise.all([
+    //    composite.metadata(),
+    //    sharp(chunks[0].buffer).metadata()
+    //]);
+    //console.log(baseMeta.width, baseMeta.height, chunkMeta.width, chunkMeta.height);
+
 
     await composite.composite(
         chunks.map(chunk => ({ input: chunk.buffer, top: chunk.offsetY, left: 0 }))
@@ -248,7 +263,10 @@ app.on('ready', async () => {
                         //console.log("Capture: " + JSON.stringify(totalRect));
                         captureRect(testWin, integerRect(totalRect), zoom, destFilename).then(() => {
                             // If all goes well, we should  output this, the filename written to, on FD 3:
-                            writeSync(3, destFilename);
+                            try {
+                                writeSync(3, destFilename);
+                            } catch (err) {
+                            }
                             testWin.close();
                             // Exit forces it (unlike app.quit):
                             app.exit();
