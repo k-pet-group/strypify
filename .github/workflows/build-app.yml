@@ -172,6 +172,7 @@ jobs:
     - name: Test plugin output
       working-directory: test/plugin
       run: |
+        ls -lrt ../../artifact/Strypify-linux-x64/
         export PATH=../../artifact/Strypify-linux-x64/:$PATH
         ./run-test.sh
   Release:
