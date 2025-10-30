@@ -58,7 +58,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     image = create_image_block parent, imgAttr
     if open_link
       base64_encoded = encode_for_url(src)
-      link_block = create_inline parent, :anchor, "Open", type: :link, target: "#{strype_url}?shared_proj_id=spy:#{base64_encoded}"
+      link_block = create_inline parent, :anchor, "Open", type: :link, target: "#{strype_url}?shared_proj_id=spy:#{base64_encoded}", attributes: { 'window' => '_blank' }
       parent << image
       parent << link_block
 
