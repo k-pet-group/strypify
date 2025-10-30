@@ -142,7 +142,7 @@ jobs:
       working-directory: test
       run: |
         ls -lrt ../artifact/Strypify-linux-x64/
-        export PATH=../artifact/Strypify-linux-x64/:$PATH
+        export PATH="$(realpath "../artifact/Strypify-linux-x64/"):$PATH"
         for PYFILE in example*.py; do
           echo Testing: $PYFILE
           FILE=$(strypify-headless.sh --file=$PYFILE)
