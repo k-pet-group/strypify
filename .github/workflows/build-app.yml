@@ -74,13 +74,13 @@ jobs:
       #    /usr/bin/ditto -c -k --keepParent Strypify.app Strypify.zip
       - name: Zip
         run: |
-          /usr/bin/ditto -c -k --keepParent Strypify-darwin-arm64/Strypify.app Strypify.zip
+          /usr/bin/ditto -c -k --keepParent Strypify-darwin-arm64/Strypify.app Strypify-macos-aarch64.zip
       - name: Archive Mac build
         uses: actions/upload-artifact@v4
         with:
           name: Strypify-mac-aarch
           path: |
-            Strypify.zip
+            Strypify-macos-aarch64.zip
 
   Build-Ubuntu-x64:
     runs-on: ubuntu-latest
