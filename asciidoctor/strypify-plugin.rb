@@ -41,7 +41,8 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     end
     filename = "#{imageCacheDirName}/strype-#{Digest::MD5.hexdigest(src)}.png"
     imgAttr = {}
-    imgAttr["target"] = filename
+    # Add a marker so we can remove any added imagesdir later (using postprocessor added at end of this file):
+    imgAttr["target"] = "SKIPIMAGESDIR/" + filename
     if not File.file?(filename)
         file = Tempfile.new('temp-strype-src')
         begin
@@ -71,4 +72,11 @@ end
 
 Asciidoctor::Extensions.register do
   block StrypeSyntaxHighlighter, :strype
+
+  postprocessor do
+    process do |document, output|
+      # Remove SKIPIMAGESDIR and any image dir path placed before it:
+      output.gsub(%r{"[^"]*SKIPIMAGESDIR/}, '"')
+    end
+  end
 end

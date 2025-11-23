@@ -1,0 +1,23 @@
+:imagesdir: some/image/path
+
+This image should resolve into imagesdir (unlike the strype images)
+
+image::fictional-image.png[Some fictional caption]
+
+Code without a link:
+
+[strype]
+----
+msg = "Hi"
+print(msg)
+----
+
+Code with a link:
+
+[strype, open_link]
+----
+def print_twice(msg):
+    print(msg)
+    print(msg)
+print_twice("Greetings")
+----
