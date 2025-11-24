@@ -140,7 +140,9 @@ if (existsSync(destFilename)) {
     app.exit(1);
 }
 
-const allLines = completeSource.split(/\r?\n/);
+// Trim leading and trailing blank lines:
+const allLines = completeSource.trim().split(/\r?\n/);
+
 
 // Find first zero-indent line that is not blank or import or def:
 let firstMain = allLines.findIndex(s => !s.match(/^(($)|(import\s+.*)|(from\s+.*)|(def\s+.*)|(#.*)|(\s+.*))/));
@@ -223,20 +225,23 @@ app.on('ready', async () => {
         await sendKey({keyCode: "Delete"}, 100);
         await sendKey({keyCode: "up"}, 100);
         await sendKey({keyCode: "up"}, 100);
-        if (imports) {
+        const hasImports = imports != null && imports.length > 0;
+        if (hasImports) {
             clipboard.writeText(imports.filter(s => s.trim()).join('\n'));
             //console.log("Pasting imports: " + clipboard.readText());
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
 
         }
         await sendKey({keyCode: "down"}, 100);
-        if (defs) {
+        const hasDefs = defs != null && defs.length > 0;
+        if (hasDefs) {
             clipboard.writeText(defs.filter(s => s.trim()).join('\n'));
             //console.log("Pasting defs: " + clipboard.readText());
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
         }
         await sendKey({keyCode: "down"}, 100);
-        if (main) {
+        const hasMain = main != null && main.length > 0;
+        if (hasMain) {
             clipboard.writeText(main.join('\n'));
             //console.log("Pasting main: " + clipboard.readText());
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
@@ -273,9 +278,9 @@ app.on('ready', async () => {
                         const mainNarrowBounds = readBounds(5);
                         let boundsToUse = [];
                         // If we have stuff elsewhere we use whole bounds, otherwise just the container:
-                        if (imports) boundsToUse.push(defs || main ? importWholeBounds : importNarrowBounds);
-                        if (defs) boundsToUse.push(imports || main ? defsWholeBounds : defsNarrowBounds);
-                        if (main) boundsToUse.push(imports || defs ? mainWholeBounds : mainNarrowBounds);
+                        if (hasImports) boundsToUse.push(hasDefs || hasMain ? importWholeBounds : importNarrowBounds);
+                        if (hasDefs) boundsToUse.push(hasImports || hasMain ? defsWholeBounds : defsNarrowBounds);
+                        if (hasMain) boundsToUse.push(hasImports || hasDefs ? mainWholeBounds : mainNarrowBounds);
                         let totalRect = boundsToUse.reduce(getUnion);
                         //console.log("Capture: " + JSON.stringify(totalRect));
                         captureRect(testWin, integerRect(totalRect), zoom, destFilename).then(() => {
