@@ -63,6 +63,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     image = create_image_block parent, imgAttr
     # Default is to centre:
     image.add_role 'text-center'
+    image.add_role 'strype-code-image'
 
     if open_link
       base64_encoded = encode_for_url(src)
