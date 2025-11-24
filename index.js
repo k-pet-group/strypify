@@ -187,6 +187,36 @@ app.on('ready', async () => {
 
     await testWin.loadURL("https://strype.org/editor/");
     testWin.webContents.on('did-stop-loading', async() => {
+        // Inject helper function for use in getting bounds:
+        await testWin.webContents.executeJavaScript(`
+            window.getUnionBoundsAsSemiStr = (selector) => {
+                const elements = document.querySelectorAll(selector);
+                if (elements.length === 0) return "";
+    
+                const firstRect = elements[0].getBoundingClientRect();
+                let union = {
+                    top: firstRect.top,
+                    left: firstRect.left,
+                    right: firstRect.right,
+                    bottom: firstRect.bottom
+                };
+    
+                elements.forEach(el => {
+                    const rect = el.getBoundingClientRect();
+                    union.top = Math.min(union.top, rect.top);
+                    union.left = Math.min(union.left, rect.left);
+                    union.right = Math.max(union.right, rect.right);
+                    union.bottom = Math.max(union.bottom, rect.bottom);
+                });
+    
+                union.width = union.right - union.left;
+                union.height = union.bottom - union.top;
+    
+                return \`\${union.left};\${union.top};\${union.width};\${union.height}\`;
+            };
+            undefined; // Don't return anything (without this, tries to return function)
+        `);
+
         testWin.webContents.setZoomFactor(zoom);
         // Clear current code and go up to imports:
         await sendKey({keyCode: "Delete"}, 100);
@@ -222,43 +252,30 @@ app.on('ready', async () => {
                 // Could probably do this simpler, but had problems initially getting more complex objects
                 // back from executeJavaScript, so we do it one primitive number at a time:
                 Promise.all([
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().x"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().y"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().width"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-1').getBoundingClientRect().height + 10"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().x"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().y"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().width"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-2').getBoundingClientRect().height + 10"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().x"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().y"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().width"),
-                    testWin.webContents.executeJavaScript("document.getElementById('frameContainer_-3').getBoundingClientRect().height - 190")
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-1')"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-2')"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-3')"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-1 > .container-frames')"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-2 > .container-frames')"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-3 > .container-frames')"),
                 ])
                     .then((allBounds) => {
+                        function readBounds(i) {
+                            const bs = allBounds[i].split(";");
+                            return {x: zoom * bs[0], y: zoom * bs[1], width: zoom * bs[2], height: zoom * bs[3]};
+                        }
                         //console.log("Bounds: " + JSON.stringify(allBounds));
-                        const importBounds = {
-                            x: zoom * allBounds[0],
-                            y: zoom * allBounds[1],
-                            width: zoom * allBounds[2],
-                            height: zoom * allBounds[3]
-                        };
-                        const defsBounds = {
-                            x: zoom * allBounds[4],
-                            y: zoom * allBounds[5],
-                            width: zoom * allBounds[6],
-                            height: zoom * allBounds[7]
-                        };
-                        const mainBounds = {
-                            x: zoom * allBounds[8],
-                            y: zoom * allBounds[9],
-                            width: zoom * allBounds[10],
-                            height: zoom * allBounds[11]
-                        };
+                        const importWholeBounds = readBounds(0);
+                        const defsWholeBounds = readBounds(1);
+                        const mainWholeBounds = readBounds(2);
+                        const importNarrowBounds = readBounds(3);
+                        const defsNarrowBounds = readBounds(4);
+                        const mainNarrowBounds = readBounds(5);
                         let boundsToUse = [];
-                        if (imports) boundsToUse.push(importBounds);
-                        if (defs) boundsToUse.push(defsBounds);
-                        if (main) boundsToUse.push(mainBounds);
+                        // If we have stuff elsewhere we use whole bounds, otherwise just the container:
+                        if (imports) boundsToUse.push(defs || main ? importWholeBounds : importNarrowBounds);
+                        if (defs) boundsToUse.push(imports || main ? defsWholeBounds : defsNarrowBounds);
+                        if (main) boundsToUse.push(imports || defs ? mainWholeBounds : mainNarrowBounds);
                         let totalRect = boundsToUse.reduce(getUnion);
                         //console.log("Capture: " + JSON.stringify(totalRect));
                         captureRect(testWin, integerRect(totalRect), zoom, destFilename).then(() => {
