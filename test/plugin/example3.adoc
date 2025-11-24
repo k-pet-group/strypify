@@ -1,0 +1,21 @@
+Image with a caption:
+
+[.text-center]
+.The Strype editor window
+[#fig1]
+image::fig-1.png[Screenshot of the Strype main editor window,600]
+
+Strype code with a caption no anchor:
+
+[strype, title="Starting code"]
+----
+my_code()
+----
+
+Strype code with a caption and anchor:
+
+[strype,id=fig3,title="More example code"]
+----
+msg = "Hi"
+print(msg)
+----

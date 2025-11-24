@@ -40,9 +40,12 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
       FileUtils.mkdir_p(imageCacheDirPath)
     end
     filename = "#{imageCacheDirName}/strype-#{Digest::MD5.hexdigest(src)}.png"
-    imgAttr = {}
+    # Pass title through so that it properly treats it like a figure caption when making the block:
+    # Also pass id through:
+    imgAttr = attrs.slice("id", "title")
     # Add a marker so we can remove any added imagesdir later (using postprocessor added at end of this file):
     imgAttr["target"] = "SKIPIMAGESDIR/" + filename
+
     if not File.file?(filename)
         file = Tempfile.new('temp-strype-src')
         begin
