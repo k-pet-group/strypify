@@ -189,7 +189,7 @@ app.on('ready', async () => {
     testWin.webContents.on('did-stop-loading', async() => {
         // Inject helper function for use in getting bounds:
         await testWin.webContents.executeJavaScript(`
-            window.getUnionBoundsAsSemiStr = (selector) => {
+            window.getUnionBoundsAsSemiStr = (selector, heightAdj) => {
                 const elements = document.querySelectorAll(selector);
                 if (elements.length === 0) return "";
     
@@ -198,7 +198,7 @@ app.on('ready', async () => {
                     top: firstRect.top,
                     left: firstRect.left,
                     right: firstRect.right,
-                    bottom: firstRect.bottom
+                    bottom: firstRect.bottom + heightAdj
                 };
     
                 elements.forEach(el => {
@@ -206,7 +206,7 @@ app.on('ready', async () => {
                     union.top = Math.min(union.top, rect.top);
                     union.left = Math.min(union.left, rect.left);
                     union.right = Math.max(union.right, rect.right);
-                    union.bottom = Math.max(union.bottom, rect.bottom);
+                    union.bottom = Math.max(union.bottom, rect.bottom + heightAdj);
                 });
     
                 union.width = union.right - union.left;
@@ -252,12 +252,12 @@ app.on('ready', async () => {
                 // Could probably do this simpler, but had problems initially getting more complex objects
                 // back from executeJavaScript, so we do it one primitive number at a time:
                 Promise.all([
-                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-1')"),
-                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-2')"),
-                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-3')"),
-                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-1 > .container-frames')"),
-                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-2 > .container-frames')"),
-                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-3 > .container-frames')"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-1', 10)"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-2', 10)"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-3', -190)"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-1 > .container-frames', 0)"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-2 > .container-frames', 0)"),
+                    testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-3 > .container-frames', 0)"),
                 ])
                     .then((allBounds) => {
                         function readBounds(i) {
