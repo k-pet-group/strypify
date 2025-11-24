@@ -56,7 +56,11 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
           file.delete
         end
     end
+
     image = create_image_block parent, imgAttr
+    # Default is to centre:
+    image.add_role 'text-center'
+
     if open_link
       base64_encoded = encode_for_url(src)
       link_block = create_inline parent, :anchor, "Open", type: :link, target: "#{strype_url}?shared_proj_id=spy:#{base64_encoded}", attributes: { 'window' => '_blank' }
