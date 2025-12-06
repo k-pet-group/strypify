@@ -1,0 +1,7 @@
+Strype code containing an image reference::
+
+[strype]
+----
+Actor(${cat-test.jpg})
+----
+

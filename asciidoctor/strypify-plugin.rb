@@ -21,6 +21,22 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
   enable_dsl
   on_context :listing
 
+  def embed_images(input)
+    input.gsub(/\$\{([^}]+)\}/) do
+      filename = Regexp.last_match(1)
+
+      unless File.exist?(filename)
+        raise "File not found: #{filename}"
+      end
+
+      ext = File.extname(filename).sub('.', '') # "png", "jpg", etc.
+      data = File.read(filename, mode: "rb")
+      encoded = Base64.strict_encode64(data)
+
+      %Q{load_image("data:image/#{ext};base64,#{encoded}")}
+    end
+  end
+
   def encode_for_url(str)
     z = Zlib::Deflate.new(Zlib::BEST_COMPRESSION, -Zlib::MAX_WBITS)
     compressed = z.deflate(str, Zlib::FINISH)
@@ -35,7 +51,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     # Must put image cache inside output dir so relative paths work:
     imageCacheDirName = '.image-cache'
     imageCacheDirPath = File.join(parent.document.attr('outdir') || ".", imageCacheDirName)
-    src = reader.readlines.join("\n")
+    src = embed_images(reader.readlines.join("\n"))
     unless File.directory?(imageCacheDirPath)
       FileUtils.mkdir_p(imageCacheDirPath)
     end
