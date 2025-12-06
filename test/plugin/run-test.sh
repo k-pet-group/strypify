@@ -1,12 +1,17 @@
 #! /bin/bash
 
 echo $PATH
+set -e
 
-asciidoctor -I../../asciidoctor -r strypify-plugin example1.adoc --trace
-bash ./diff-html-body.sh expected-example1.html example1.html || { echo "Files for example1 differ!"; exit 1; }
+for src in example*.adoc; do
+    base="${src%.adoc}"                 # example1 → example1
+    expected="expected-${base}.html"    # → expected-example1.html
+    output="${base}.html"               # → example1.html
 
-asciidoctor -I../../asciidoctor -r strypify-plugin example2.adoc --trace
-bash ./diff-html-body.sh expected-example2.html example2.html || { echo "Files for example2 differ!"; exit 1; }
+    asciidoctor -I../../asciidoctor -r strypify-plugin "$src" --trace
 
-asciidoctor -I../../asciidoctor -r strypify-plugin example3.adoc --trace
-bash ./diff-html-body.sh expected-example3.html example3.html || { echo "Files for example3 differ!"; exit 1; }
+    bash ./diff-html-body.sh "$expected" "$output" || {
+        echo "Files for $base differ!"
+        exit 1
+    }
+done
