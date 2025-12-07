@@ -3,6 +3,12 @@ const {writeSync, readFileSync, existsSync} = require("node:fs");
 const crypto = require('crypto');
 const sharp = require('sharp');
 
+// Print version and exit, if they asked for it:
+if (process.argv.includes("--version") || process.argv.includes("-v")) {
+    console.log(app.getVersion());
+    app.exit(0);
+}
+
 // Gets the union of the two rectangles, i.e. the smallest rectangle
 // that includes the full bounds of both the given rectangles.
 function getUnion(rect1, rect2) {
