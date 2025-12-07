@@ -186,14 +186,11 @@ app.on('ready', async () => {
 
     async function sendKey(entry, delay)
     {
-        await Promise.all(["keyDown", "keyUp"].map(async(type) =>
-        {
-            entry.type = type;
-            testWin.webContents.sendInputEvent(entry);
-
-            // Delay
-            await new Promise(resolve => setTimeout(resolve, delay));
-        }));
+        testWin.webContents.sendInputEvent({...entry, type: "keyDown"});
+        await new Promise(resolve => setTimeout(resolve, 25));
+        testWin.webContents.sendInputEvent({...entry, type: "keyUp"});
+        // Delay after:
+        await new Promise(resolve => setTimeout(resolve, delay));
     }
 
 
