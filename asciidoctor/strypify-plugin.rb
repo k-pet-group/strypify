@@ -65,6 +65,8 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     if not File.file?(filename)
         file = Tempfile.new('temp-strype-src')
         begin
+          # Important to use binary mode so \n doesn't get turned into \r\n on Windows (which upsets MD5 hash):
+          file.binmode
           file.write src
           file.close
 
