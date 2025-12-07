@@ -71,6 +71,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     line_info = reader.cursor.line_info
     strype_url = attrs['strype_url'] || parent.document.attr('strype_url') || 'https://strype.org/editor/'
     open_link = (attrs['open_link'] == 'true' || attrs.values.include?('open_link')) || parent.document.attr('open_link') || nil
+    images_dir = parent.document.attr('imagesdir') || ''
 
     # Central cache:
     centralImageCacheDirPath = File.join(Dir.home, ".strypify-image-cache")
@@ -90,8 +91,13 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     # Pass title through so that it properly treats it like a figure caption when making the block:
     # Also pass id through, and some other items:
     imgAttr = attrs.slice("id", "title", "alt", "width", "height", "scale", "align", "role", "opts")
-    # Add a marker so we can remove any added imagesdir later (using postprocessor added at end of this file):
-    imgAttr["target"] = "SKIPIMAGESDIR/" + localFilename
+    # Cancel out images_dir:
+    imgAttr["target"] = if images_dir.empty?
+                   localFilename
+                 else
+                   # Count path components and prepend that many ".."
+                   images_dir.split('/').map { '..' }.join('/') + '/' + localFilename
+                 end
 
     if not File.file?(localFilename)
         # Do we have it in the central cache?
