@@ -13,9 +13,10 @@ STRYPIFY_CMD =
   elsif HOST_OS =~ /darwin/
     "/Applications/Strypify.app/Contents/MacOS/Strypify"
   else
-    strypify_cmd = "strypify-headless.sh"
+    "strypify-headless.sh"
   end
 
+VERSION = %x(#{STRYPIFY_CMD} --version).strip
 
 class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
   enable_dsl
@@ -59,7 +60,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     unless File.directory?(imageCacheDirPath)
       FileUtils.mkdir_p(imageCacheDirPath)
     end
-    justFilename = "strype-#{Digest::MD5.hexdigest(src)}.png"
+    justFilename = "strype-strypify#{VERSION}-#{Digest::MD5.hexdigest(src)}.png"
     localFilename = "#{imageCacheDirName}/#{justFilename}"
     centralFilename = File.join(centralImageCacheDirPath, justFilename)
 
@@ -83,7 +84,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
               file.close
 
               Dir.chdir(imageCacheDirPath){
-                puts %x(#{STRYPIFY_CMD} --file=#{file.path})
+                puts %x(#{STRYPIFY_CMD} --file=#{file.path} --output-file=#{justFilename})
                 sleep(1)
                 # Copy it to central cache, since it wasn't there:
                 FileUtils.cp(justFilename, centralFilename)

@@ -137,14 +137,18 @@ if (existsSync(arg)) {
     console.log("Cannot find file " + arg);
     app.exit(-1);
 }
-// Filename is predetermined by the MD5 hash of the code.  This helps with caching the image to avoid
-// unnecessary regeneration.
-const destFilename = 'strype-' + crypto.createHash('md5').update(completeSource).digest('hex') + '.png';
 
-if (existsSync(destFilename)) {
-    console.log("File already exists, not regenerating.");
-    app.exit(1);
+let destFilename = app.commandLine.getSwitchValue("output-file");
+if (!destFilename) {
+    // Default filename is predetermined by the MD5 hash of the code.  This helps with caching the image to avoid
+    // unnecessary regeneration.
+    destFilename = 'strype-' + crypto.createHash('md5').update(completeSource).digest('hex') + '.png';
+    if (existsSync(destFilename)) {
+        console.log("File already exists, not regenerating.");
+        app.exit(1);
+    }
 }
+// Note: if they specified filename we always overwrite
 
 // Trim leading and trailing blank lines:
 const allLines = completeSource.trim().split(/\r?\n/);
