@@ -4,7 +4,7 @@ require 'tempfile'
 require 'rbconfig'
 require 'zlib'
 require 'base64'
-
+require 'open3'
 
 HOST_OS = RbConfig::CONFIG['host_os']
 STRYPIFY_CMD =
@@ -110,7 +110,11 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
 
               unless syntax_err
                   Dir.chdir(imageCacheDirPath){
-                    puts %x(#{STRYPIFY_CMD} --file=#{file.path})
+                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}")
+
+                    unless status.success?
+                      return create_block(parent, :paragraph, "Strypify failed (exit #{status.exitstatus}), stdout: #{stdout}, stderr: #{stderr}", {})
+                    end
                     sleep(1)
                     # Copy it to central cache, since it wasn't there:
                     FileUtils.cp(justFilename, centralFilename)
@@ -148,11 +152,4 @@ end
 
 Asciidoctor::Extensions.register do
   block StrypeSyntaxHighlighter, :strype
-
-  postprocessor do
-    process do |document, output|
-      # Remove SKIPIMAGESDIR and any image dir path placed before it:
-      output.gsub(%r{"[^"]*SKIPIMAGESDIR/}, '"')
-    end
-  end
 end
