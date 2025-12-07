@@ -48,6 +48,10 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     strype_url = attrs['strype_url'] || parent.document.attr('strype_url') || 'https://strype.org/editor/'
     open_link = (attrs['open_link'] == 'true' || attrs.values.include?('open_link')) || parent.document.attr('open_link') || nil
 
+    # Central cache:
+    centralImageCacheDirPath = File.join(Dir.home, ".strypify-image-cache")
+    Dir.mkdir(centralImageCacheDirPath) unless Dir.exist?(centralImageCacheDirPath)
+
     # Must put image cache inside output dir so relative paths work:
     imageCacheDirName = '.image-cache'
     imageCacheDirPath = File.join(parent.document.attr('outdir') || ".", imageCacheDirName)
@@ -55,27 +59,43 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     unless File.directory?(imageCacheDirPath)
       FileUtils.mkdir_p(imageCacheDirPath)
     end
-    filename = "#{imageCacheDirName}/strype-#{Digest::MD5.hexdigest(src)}.png"
+    justFilename = "strype-#{Digest::MD5.hexdigest(src)}.png"
+    localFilename = "#{imageCacheDirName}/#{justFilename}"
+    centralFilename = File.join(centralImageCacheDirPath, justFilename)
+
     # Pass title through so that it properly treats it like a figure caption when making the block:
     # Also pass id through, and some other items:
     imgAttr = attrs.slice("id", "title", "alt", "width", "height", "scale", "align", "role", "opts")
     # Add a marker so we can remove any added imagesdir later (using postprocessor added at end of this file):
-    imgAttr["target"] = "SKIPIMAGESDIR/" + filename
+    imgAttr["target"] = "SKIPIMAGESDIR/" + localFilename
 
-    if not File.file?(filename)
-        file = Tempfile.new('temp-strype-src')
-        begin
-          # Important to use binary mode so \n doesn't get turned into \r\n on Windows (which upsets MD5 hash):
-          file.binmode
-          file.write src
-          file.close
+    if not File.file?(localFilename)
+        # Do we have it in the central cache?
+        if File.file?(centralFilename)
+            # Yes; copy it from there:
+            FileUtils.cp(centralFilename, localFilename)
+        else
+            file = Tempfile.new('temp-strype-src')
+            begin
+              # Important to use binary mode so \n doesn't get turned into \r\n on Windows (which upsets MD5 hash):
+              file.binmode
+              file.write src
+              file.close
 
-          Dir.chdir(imageCacheDirPath){
-            %x(#{STRYPIFY_CMD} --file=#{file.path})
-          }
-        ensure
-          file.delete
+              Dir.chdir(imageCacheDirPath){
+                puts %x(#{STRYPIFY_CMD} --file=#{file.path})
+                sleep(1)
+                # Copy it to central cache, since it wasn't there:
+                FileUtils.cp(justFilename, centralFilename)
+              }
+
+            ensure
+              file.delete
+            end
         end
+    elsif not File.file?(centralFilename)
+        # In local, but not central, take a copy:
+        FileUtils.cp(localFilename, centralFilename)
     end
 
     image = create_image_block parent, imgAttr
