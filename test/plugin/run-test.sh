@@ -14,4 +14,8 @@ for src in example*.adoc; do
         echo "Files for $base differ!"
         exit 1
     }
+    bash ./check-links-exist.sh "$output" || {
+          echo "Link(s) for $base pointed to missing file"
+          exit 1
+      }
 done
