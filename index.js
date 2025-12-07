@@ -150,6 +150,56 @@ if (!destFilename) {
 }
 // Note: if they specified filename we always overwrite
 
+const cursorNavigation = app.commandLine.getSwitchValue("cursor-navigation");
+let navigationCommands = null;
+if (cursorNavigation) {
+    // Remove all spaces and split by commas:
+    const items = cursorNavigation.toLowerCase().replace(/\s+/g, "").split(",");
+
+    // mapping table
+    const map = {
+        up: "Up",
+        down: "Down",
+        left: "Left",
+        right: "Right",
+        home: "Home",
+        end: "End"
+    };
+
+    const result = [];
+
+    for (let item of items) {
+        if (!item) continue;
+
+        let count = 1;
+        let action = item;
+
+        // 3. handle N*action or action*N
+        let match = item.match(/^(\d+)\*(\w+)$/);
+        if (match) {
+            count = Number(match[1]);
+            action = match[2];
+        }
+        else {
+            match = item.match(/^(\w+)\*(\d+)$/);
+            if (match) {
+                count = Number(match[2]);
+                action = match[1];
+            }
+        }
+
+        // 4. map up to ArrowUp etc.
+        const mapped = map[action.toLowerCase()];
+        if (!mapped) throw new Error("Unknown action: " + action);
+
+        // 5. expand repetitions
+        for (let i = 0; i < count; i++) {
+            result.push(mapped);
+        }
+    }
+    navigationCommands = result;
+}
+
 // Trim leading and trailing blank lines:
 const allLines = completeSource.trim().split(/\r?\n/);
 
@@ -196,6 +246,16 @@ app.on('ready', async () => {
 
     await testWin.loadURL("https://strype.org/editor/");
     testWin.webContents.on('did-stop-loading', async() => {
+        // Set CSS:
+        if (navigationCommands == null) {
+            // Hide frame cursor:
+            testWin.webContents.insertCSS(`
+                .caret {
+                  height: 0px !important;
+                }
+              `);
+        }
+
         // Inject helper function for use in getting bounds:
         await testWin.webContents.executeJavaScript(`
             window.getUnionBoundsAsSemiStr = (selector, heightAdj) => {
@@ -252,6 +312,12 @@ app.on('ready', async () => {
             clipboard.writeText(main.join('\n'));
             //console.log("Pasting main: " + clipboard.readText());
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
+        }
+
+        if (navigationCommands != null) {
+            for (let key of navigationCommands) {
+                sendKey({key: key}, 150);
+            }
         }
 
         // Need to wait for re-render after adjusting zoom and sending paste:
