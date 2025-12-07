@@ -37,6 +37,29 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     end
   end
 
+  def python_syntax_error(file)
+    # 1. Check if Python is available
+    python_cmd = nil
+    null_dev = Gem.win_platform? ? 'NUL' : '/dev/null'
+
+    ['python', 'python3', 'py'].each do |cmd|
+      if system("#{cmd} --version > #{null_dev} 2>&1") || system("#{cmd} --version > #{null_dev} 2>&1")
+        python_cmd = cmd
+        break
+      end
+    end
+
+    # If no Python, return nil (assume valid)
+    return nil unless python_cmd
+
+    # 2. Try syntax check
+    output = `#{python_cmd} -m py_compile #{file} 2>&1`
+    return nil if $?.success?
+
+    # 3. Return the error output
+    output.strip
+  end
+
   def encode_for_url(str)
     z = Zlib::Deflate.new(Zlib::BEST_COMPRESSION, -Zlib::MAX_WBITS)
     compressed = z.deflate(str, Zlib::FINISH)
@@ -45,6 +68,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
   end
 
   def process parent, reader, attrs
+    line_info = reader.cursor.line_info
     strype_url = attrs['strype_url'] || parent.document.attr('strype_url') || 'https://strype.org/editor/'
     open_link = (attrs['open_link'] == 'true' || attrs.values.include?('open_link')) || parent.document.attr('open_link') || nil
 
@@ -82,12 +106,18 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
               file.write src
               file.close
 
-              Dir.chdir(imageCacheDirPath){
-                puts %x(#{STRYPIFY_CMD} --file=#{file.path})
-                sleep(1)
-                # Copy it to central cache, since it wasn't there:
-                FileUtils.cp(justFilename, centralFilename)
-              }
+              syntax_err = python_syntax_error(file.path)
+
+              unless syntax_err
+                  Dir.chdir(imageCacheDirPath){
+                    puts %x(#{STRYPIFY_CMD} --file=#{file.path})
+                    sleep(1)
+                    # Copy it to central cache, since it wasn't there:
+                    FileUtils.cp(justFilename, centralFilename)
+                  }
+              else
+                return create_block(parent, :paragraph, "Invalid Python: " + syntax_err.gsub(file.path, "Strype block #{line_info}"), {})
+              end
 
             ensure
               file.delete

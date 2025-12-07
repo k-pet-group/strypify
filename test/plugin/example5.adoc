@@ -1,0 +1,22 @@
+Strype code with syntax error:
+
+[strype]
+----
+Actor(
+----
+
+No error (although missing param):
+
+[strype]
+----
+Actor()
+----
+
+Error again:
+
+[strype]
+----
+print("Hello")
+if True
+    doSomething()
+----
