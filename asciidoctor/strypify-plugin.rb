@@ -85,8 +85,9 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     unless File.directory?(imageCacheDirPath)
       FileUtils.mkdir_p(imageCacheDirPath)
     end
-    justFilename = "strype-strypify#{VERSION}-#{Digest::MD5.hexdigest(src)}.png"
-    localFilename = "#{imageCacheDirName}/#{justFilename}"
+    justFilename = "strype-#{Digest::MD5.hexdigest(src)}.png"
+    localFilename = "#{imageCacheDirPath}/#{justFilename}"
+    relativeFilename = "#{imageCacheDirName}/#{justFilename}"
     centralFilename = File.join(centralImageCacheDirPath, justFilename)
 
     # Pass title through so that it properly treats it like a figure caption when making the block:
@@ -94,10 +95,10 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     imgAttr = attrs.slice("id", "title", "alt", "width", "height", "scale", "align", "role", "opts")
     # Cancel out images_dir:
     imgAttr["target"] = if images_dir.empty?
-                   localFilename
+                   relativeFilename
                  else
                    # Count path components and prepend that many ".."
-                   images_dir.split('/').map { '..' }.join('/') + '/' + localFilename
+                   images_dir.split('/').map { '..' }.join('/') + '/' + relativeFilename
                  end
 
     if not File.file?(localFilename)
