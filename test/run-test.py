@@ -10,7 +10,7 @@ def rmsdiff(im1, im2):
     return rms
 
 
-actual = os.environ['FILE']
+actual = os.environ['ACTUALFILE']
 expected = os.environ['EXPECTEDFILE']
 print("Comparing images " + actual + " and " + expected)
 im1 = Image.open(actual).convert("RGB")

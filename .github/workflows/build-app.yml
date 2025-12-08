@@ -143,19 +143,7 @@ jobs:
       run: |
         ls -lrt ../artifact/Strypify-linux-x64/
         export PATH="$(realpath "../artifact/Strypify-linux-x64/"):$PATH"
-        for PYFILE in example*.py; do
-          echo Testing: $PYFILE
-          FILE=$(strypify-headless.sh --file=$PYFILE)
-          EXPECTEDFILE="expected-${PYFILE%.py}.png"
-          if [ ! -f "$FILE" ]; then
-            echo "Image $FILE does not exist!"
-            exit 1
-          fi
-          echo Comparing $FILE to $EXPECTEDFILE
-          export FILE
-          export EXPECTEDFILE
-          python3 run-test.py
-        done
+        ./run-indiv-tests.sh
     - name: Upload generated images if tests failed
       if: failure()  # only runs if previous step failed
       uses: actions/upload-artifact@v4

@@ -144,8 +144,11 @@ if (!destFilename) {
     // unnecessary regeneration.
     destFilename = 'strype-' + crypto.createHash('md5').update(completeSource).digest('hex') + '.png';
     if (existsSync(destFilename)) {
-        console.log("File already exists, not regenerating.");
-        app.exit(1);
+        try {
+            writeSync(3, destFilename);
+        } catch (err) {
+        }
+        app.exit(0);
     }
 }
 // Note: if they specified filename we always overwrite
