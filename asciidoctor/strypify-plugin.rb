@@ -13,9 +13,10 @@ STRYPIFY_CMD =
   elsif HOST_OS =~ /darwin/
     "/Applications/Strypify.app/Contents/MacOS/Strypify"
   else
-    strypify_cmd = "strypify-headless.sh"
+    "strypify-headless.sh"
   end
 
+VERSION = %x(#{STRYPIFY_CMD} --version).strip
 
 class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
   enable_dsl
@@ -84,7 +85,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     unless File.directory?(imageCacheDirPath)
       FileUtils.mkdir_p(imageCacheDirPath)
     end
-    justFilename = "strype-#{Digest::MD5.hexdigest(src)}.png"
+    justFilename = "strype-strypify#{VERSION}-#{Digest::MD5.hexdigest(src)}.png"
     localFilename = "#{imageCacheDirName}/#{justFilename}"
     centralFilename = File.join(centralImageCacheDirPath, justFilename)
 
@@ -116,7 +117,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
 
               unless syntax_err
                   Dir.chdir(imageCacheDirPath){
-                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}")
+                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path} --output-file=#{justFilename}")
 
                     unless status.success?
                       return create_block(parent, :paragraph, "Strypify failed (exit #{status.exitstatus}), stdout: #{stdout}, stderr: #{stderr}", {})

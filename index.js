@@ -3,6 +3,12 @@ const {writeSync, readFileSync, existsSync} = require("node:fs");
 const crypto = require('crypto');
 const sharp = require('sharp');
 
+// Print version and exit, if they asked for it:
+if (process.argv.includes("--version") || process.argv.includes("-v")) {
+    console.log(app.getVersion());
+    app.exit(0);
+}
+
 // Gets the union of the two rectangles, i.e. the smallest rectangle
 // that includes the full bounds of both the given rectangles.
 function getUnion(rect1, rect2) {
@@ -131,13 +137,67 @@ if (existsSync(arg)) {
     console.log("Cannot find file " + arg);
     app.exit(-1);
 }
-// Filename is predetermined by the MD5 hash of the code.  This helps with caching the image to avoid
-// unnecessary regeneration.
-const destFilename = 'strype-' + crypto.createHash('md5').update(completeSource).digest('hex') + '.png';
 
-if (existsSync(destFilename)) {
-    console.log("File already exists, not regenerating.");
-    app.exit(1);
+let destFilename = app.commandLine.getSwitchValue("output-file");
+if (!destFilename) {
+    // Default filename is predetermined by the MD5 hash of the code.  This helps with caching the image to avoid
+    // unnecessary regeneration.
+    destFilename = 'strype-' + crypto.createHash('md5').update(completeSource).digest('hex') + '.png';
+    if (existsSync(destFilename)) {
+        console.log("File already exists, not regenerating.");
+        app.exit(1);
+    }
+}
+// Note: if they specified filename we always overwrite
+
+const cursorNavigation = app.commandLine.getSwitchValue("cursor-navigation");
+let navigationCommands = null;
+if (cursorNavigation) {
+    // Remove all spaces and split by commas:
+    const items = cursorNavigation.toLowerCase().replace(/\s+/g, "").split(",");
+
+    // mapping table
+    const map = {
+        up: "Up",
+        down: "Down",
+        left: "Left",
+        right: "Right",
+        home: "Home",
+        end: "End"
+    };
+
+    const result = [];
+
+    for (let item of items) {
+        if (!item) continue;
+
+        let count = 1;
+        let action = item;
+
+        // 3. handle N*action or action*N
+        let match = item.match(/^(\d+)\*(\w+)$/);
+        if (match) {
+            count = Number(match[1]);
+            action = match[2];
+        }
+        else {
+            match = item.match(/^(\w+)\*(\d+)$/);
+            if (match) {
+                count = Number(match[2]);
+                action = match[1];
+            }
+        }
+
+        // 4. map up to ArrowUp etc.
+        const mapped = map[action.toLowerCase()];
+        if (!mapped) throw new Error("Unknown action: " + action);
+
+        // 5. expand repetitions
+        for (let i = 0; i < count; i++) {
+            result.push(mapped);
+        }
+    }
+    navigationCommands = result;
 }
 
 // Trim leading and trailing blank lines:
@@ -176,19 +236,26 @@ app.on('ready', async () => {
 
     async function sendKey(entry, delay)
     {
-        await Promise.all(["keyDown", "keyUp"].map(async(type) =>
-        {
-            entry.type = type;
-            testWin.webContents.sendInputEvent(entry);
-
-            // Delay
-            await new Promise(resolve => setTimeout(resolve, delay));
-        }));
+        testWin.webContents.sendInputEvent({...entry, type: "keyDown"});
+        await new Promise(resolve => setTimeout(resolve, 25));
+        testWin.webContents.sendInputEvent({...entry, type: "keyUp"});
+        // Delay after:
+        await new Promise(resolve => setTimeout(resolve, delay));
     }
 
 
     await testWin.loadURL("https://strype.org/editor/");
     testWin.webContents.on('did-stop-loading', async() => {
+        // Set CSS:
+        if (navigationCommands == null) {
+            // Hide frame cursor:
+            testWin.webContents.insertCSS(`
+                .caret {
+                  height: 0px !important;
+                }
+              `);
+        }
+
         // Inject helper function for use in getting bounds:
         await testWin.webContents.executeJavaScript(`
             window.getUnionBoundsAsSemiStr = (selector, heightAdj) => {
@@ -245,6 +312,12 @@ app.on('ready', async () => {
             clipboard.writeText(main.join('\n'));
             //console.log("Pasting main: " + clipboard.readText());
             await testWin.webContents.executeJavaScript("document.execCommand('paste');");
+        }
+
+        if (navigationCommands != null) {
+            for (let key of navigationCommands) {
+                sendKey({key: key}, 150);
+            }
         }
 
         // Need to wait for re-render after adjusting zoom and sending paste:

@@ -8,6 +8,7 @@ for src in example*.adoc; do
     expected="expected-${base}.html"    # → expected-example1.html
     output="${base}.html"               # → example1.html
 
+    echo Running asciidoctor $src
     asciidoctor -I../../asciidoctor -r strypify-plugin "$src" --trace
 
     bash ./diff-html-body.sh "$expected" "$output" || {
