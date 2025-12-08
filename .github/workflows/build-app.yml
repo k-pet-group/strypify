@@ -143,7 +143,7 @@ jobs:
       run: |
         ls -lrt ../artifact/Strypify-linux-x64/
         export PATH="$(realpath "../artifact/Strypify-linux-x64/"):$PATH"
-        ./run-indiv-tests.sh
+        bash ./run-indiv-tests.sh
     - name: Upload generated images if tests failed
       if: failure()  # only runs if previous step failed
       uses: actions/upload-artifact@v4
@@ -162,7 +162,7 @@ jobs:
       run: |
         ls -lrt ../../artifact/Strypify-linux-x64/
         export PATH="$(realpath "../../artifact/Strypify-linux-x64/"):$PATH" 
-        ./run-test.sh
+        bash ./run-test.sh
   Validate-Version:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')   # only run for version tags
