@@ -319,7 +319,7 @@ app.on('ready', async () => {
 
         if (navigationCommands != null) {
             for (let key of navigationCommands) {
-                sendKey({key: key}, 150);
+                sendKey({keyCode: key}, 150);
             }
         }
 
