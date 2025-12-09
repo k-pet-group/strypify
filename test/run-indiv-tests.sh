@@ -10,6 +10,11 @@ else
     STRYPIFY="../Strypify-darwin-arm64/Strypify.app/Contents/MacOS/Strypify"
 fi
 
+if [[ ! -f "$STRYPIFY" ]]; then
+    # Strip everything before the last `/` to use PATH:
+    STRYPIFY="${STRYPIFY##*/}"
+fi
+
 echo Strypify: $STRYPIFY
 PYTHON=$(command -v python3 || command -v python)
 echo Python: $PYTHON
