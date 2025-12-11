@@ -125,6 +125,16 @@ if (!zoom || isNaN(zoom)) {
     zoom = 2.5;
 }
 
+let editorURL = app.commandLine.getSwitchValue("editor-url") || "https://strype.org/editor/";
+if (!(editorURL.startsWith("https:") || editorURL.startsWith("http:"))) {
+    if (editorURL.startsWith("localhost")) {
+        editorURL = "http://" + editorURL;
+    }
+    else {
+        editorURL = "https://" + editorURL;
+    }
+}
+
 let arg = app.commandLine.getSwitchValue("file");
 if (!arg) {
     console.log("Must pass Python code as argument, e.g. --file=myfile.py (the equals is required)");
@@ -247,7 +257,7 @@ app.on('ready', async () => {
     }
 
 
-    await testWin.loadURL("https://strype.org/editor/");
+    await testWin.loadURL(editorURL);
     testWin.webContents.on('did-stop-loading', async() => {
         // Set CSS:
         if (navigationCommands == null) {
@@ -258,6 +268,12 @@ app.on('ready', async () => {
                 }
               `);
         }
+        // Hide the DEVELOPMENT overlay if pointing to a Github instance:
+        testWin.webContents.insertCSS(`
+            body::before {
+                content: "" !important;
+            }        
+        `);
 
         // Inject helper function for use in getting bounds:
         await testWin.webContents.executeJavaScript(`

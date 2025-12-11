@@ -118,7 +118,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
 
               unless syntax_err
                   Dir.chdir(imageCacheDirPath){
-                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path} --output-file=#{justFilename}")
+                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path} --output-file=#{justFilename} --editor-url=#{strype_url}")
 
                     unless status.success?
                       return create_block(parent, :paragraph, "Strypify failed (exit #{status.exitstatus}), stdout: #{stdout}, stderr: #{stderr}", {})
