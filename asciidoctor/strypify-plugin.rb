@@ -22,12 +22,16 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
   enable_dsl
   on_context :listing
 
-  def embed_images(input)
+  def embed_images(input, images_dir)
     input.gsub(/\$\{([^}]+)\}/) do
       filename = Regexp.last_match(1)
 
-      unless File.exist?(filename)
-        raise "File not found: #{filename}"
+      if File.exist?(filename)
+        # Fine, no processing needed
+      elsif File.exist?(File.join(images_dir, filename))
+        filename = File.join(images_dir, filename)
+      else
+        raise "File not found in current dir or in #{images_dir}: #{filename}"
       end
 
       ext = File.extname(filename).sub('.', '') # "png", "jpg", etc.
@@ -81,7 +85,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     # Must put image cache inside output dir so relative paths work:
     imageCacheDirName = '.image-cache'
     imageCacheDirPath = File.join(parent.document.attr('outdir') || ".", imageCacheDirName)
-    src = embed_images(reader.readlines.join("\n"))
+    src = embed_images(reader.readlines.join("\n"), images_dir)
     unless File.directory?(imageCacheDirPath)
       FileUtils.mkdir_p(imageCacheDirPath)
     end
