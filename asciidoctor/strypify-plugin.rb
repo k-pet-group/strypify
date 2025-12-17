@@ -89,7 +89,8 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     unless File.directory?(imageCacheDirPath)
       FileUtils.mkdir_p(imageCacheDirPath)
     end
-    justFilename = "strype-strypify#{VERSION}-#{Digest::MD5.hexdigest(src)}.png"
+    md5 = Digest::MD5.hexdigest(src)
+    justFilename = "strype-strypify#{VERSION}-#{md5}.png"
     localFilename = "#{imageCacheDirPath}/#{justFilename}"
     relativeFilename = "#{imageCacheDirName}/#{justFilename}"
     centralFilename = File.join(centralImageCacheDirPath, justFilename)
@@ -104,6 +105,8 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
                    # Count path components and prepend that many ".."
                    images_dir.split('/').map { '..' }.join('/') + '/' + relativeFilename
                  end
+    imgAttr["alt"] = "Strype code" unless imgAttr.key?("alt")
+
 
     if not File.file?(localFilename)
         # Do we have it in the central cache?
@@ -122,7 +125,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
 
               unless syntax_err
                   Dir.chdir(imageCacheDirPath){
-                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path} --output-file=#{justFilename} --editor-url=#{strype_url}")
+                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{justFilename}", "--editor-url=#{strype_url}")
 
                     unless status.success?
                       return create_block(parent, :paragraph, "Strypify failed (exit #{status.exitstatus}), stdout: #{stdout}, stderr: #{stderr}", {})

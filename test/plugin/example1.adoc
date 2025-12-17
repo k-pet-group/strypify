@@ -1,5 +1,3 @@
-:strype_url: http://localhost:8081/editor/
-
 Code without a link:
 
 [strype]
