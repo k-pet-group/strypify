@@ -3,6 +3,9 @@
 echo $PATH
 set -e
 
+rm -rf ./.image-cache
+rm -rf ~/.strypify-image-cache/
+
 for src in example*.adoc; do
     base="${src%.adoc}"                 # example1 → example1
     expected="expected-${base}.html"    # → expected-example1.html
