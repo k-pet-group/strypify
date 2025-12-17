@@ -89,7 +89,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     unless File.directory?(imageCacheDirPath)
       FileUtils.mkdir_p(imageCacheDirPath)
     end
-    justFilename = "strype-#{Digest::MD5.hexdigest(src)}.png"
+    justFilename = "strype-strypify#{VERSION}-#{Digest::MD5.hexdigest(src)}.png"
     localFilename = "#{imageCacheDirPath}/#{justFilename}"
     relativeFilename = "#{imageCacheDirName}/#{justFilename}"
     centralFilename = File.join(centralImageCacheDirPath, justFilename)
