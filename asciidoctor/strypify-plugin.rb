@@ -152,19 +152,49 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     image.add_role 'text-center'
     image.add_role 'strype-code-image'
 
+    desc = nil
+    if parent.document.backend == 'html5'
+      code = src.gsub(/load_image\("data:[^"]+"\)/, "image_literal")
+      # The style below makes a "physically invisible" element that will still show up for
+      # screen readers to take notice of (they ignore hidden elements or display:none, etc)
+      html = <<~HTML
+        <div id="fullcode-#{md5}" style="position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;">
+         <pre><code>#{code}</code></pre>
+        </div>
+      HTML
+      desc = create_block parent, :pass, html, {}
+    end
+
     if open_link
       base64_encoded = encode_for_url(src)
       link_block = create_inline parent, :anchor, "Open", type: :link, target: "#{strype_url}?shared_proj_id=spy:#{base64_encoded}", attributes: { 'window' => '_blank' }
       parent << image
+      parent << desc if desc
       parent << link_block
-
       nil  # return nil because we've inserted blocks ourselves
     else
-      image
+      parent << image
+      parent << desc if desc
+      nil
     end
   end
 end
 
 Asciidoctor::Extensions.register do
   block StrypeSyntaxHighlighter, :strype
+
+  postprocessor do
+      #on_backend :html5
+      process do |doc, output|
+        output.gsub(/<img[^>]*src="[^"]+strype-strypify[^"]+-([0-9a-z]+)\.png"[^>]*>/) do |img|
+          md5 = Regexp.last_match(1)
+          puts "Image: #{img} and md5: #{md5}"
+          if img.include? 'aria-describedby='
+            img
+          else
+            img.sub(/>$/, " aria-describedby=\"fullcode-#{md5}\">")
+          end
+        end
+      end
+    end
 end
