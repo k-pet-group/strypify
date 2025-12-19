@@ -188,7 +188,6 @@ Asciidoctor::Extensions.register do
       process do |doc, output|
         output.gsub(/<img[^>]*src="[^"]+strype-strypify[^"]+-([0-9a-z]+)\.png"[^>]*>/) do |img|
           md5 = Regexp.last_match(1)
-          puts "Image: #{img} and md5: #{md5}"
           if img.include? 'aria-describedby='
             img
           else
