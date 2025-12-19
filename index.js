@@ -1,7 +1,8 @@
 const { app, BrowserWindow, clipboard} = require('electron')
-const {writeSync, readFileSync, existsSync} = require("node:fs");
+const {writeFileSync, writeSync, readFileSync, existsSync, rmSync, mkdtempSync} = require("node:fs");
 const crypto = require('crypto');
 const sharp = require('sharp');
+const path = require('path');
 
 // Print version and exit, if they asked for it:
 if (process.argv.includes("--version") || process.argv.includes("-v")) {
@@ -61,11 +62,11 @@ async function captureRect(win, rect, zoom, outputFile) {
     const chunks = [];
 
     // Divide rectangle into vertical chunks
-    const captureWidth = Math.min(viewportWidth, rect.width);
-    for (let offsetY = 0; offsetY < rect.height; offsetY += viewportHeight) {
+    const captureWidth = Math.floor(Math.min(viewportWidth, rect.width));
+    for (let offsetY = 0; offsetY < rect.height; offsetY += Math.floor(viewportHeight)) {
         // targetScrollY is device pixels:
         const targetScrollY = rect.y + offsetY;
-        const captureHeight = Math.min(viewportHeight, rect.height - offsetY);
+        const captureHeight = Math.floor(Math.min(viewportHeight, rect.height - offsetY));
 
         //console.log("Capturing chunk Y: " + targetScrollY + "+" + captureHeight, " with X: " + rect.x + "+" + rect.width + " and viewportSize: " + viewportWidth + " x " + viewportHeight);
 
@@ -216,18 +217,6 @@ if (cursorNavigation) {
 // Trim leading and trailing blank lines:
 const allLines = completeSource.trim().split(/\r?\n/);
 
-
-// Find first zero-indent line that is not blank or import or def:
-let firstMain = allLines.findIndex(s => !s.match(/^(($)|(import\s+.*)|(from\s+.*)|(def\s+.*)|(#.*)|(\s+.*))/));
-// Also include preceding blanks and left-aligned comments:
-while (firstMain > 0 && allLines[firstMain - 1].match(/^((\s*$)|#.*)/)) {
-    firstMain -= 1;
-}
-const main = firstMain === -1 ? null : allLines.slice(firstMain);
-const lastImport = allLines.findLastIndex(s => s.match(/^((import\s+)|(from\s+))/));
-const imports = lastImport === -1 ? null : allLines.slice(0, lastImport + 1);
-const defs = firstMain === lastImport + 1 ? null : allLines.slice(lastImport === -1 ? 0 : lastImport + 1, firstMain === -1 ? allLines.length : firstMain);
-
 app.on('ready', async () => {
     const debugging = false;
     const testWin = new BrowserWindow({
@@ -239,9 +228,22 @@ app.on('ready', async () => {
             // Must turn off sandbox to be able to write image files:
             sandbox: false,
             // Also need to toggle for debugging:
-            offscreen: !debugging
+            offscreen: !debugging,
+            // Support for loading a file:
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,   // recommended
+            nodeIntegration: false    // recommended
         },
     });
+
+
+    const tempDir = mkdtempSync('strypify-');
+    process.on('exit', () => {
+        rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    const tempFile = path.join(tempDir, 'strypify.spy');
+    writeFileSync(tempFile, allLines.join("\n"));
 
     // Must get rid of old data to revert to basic project:
     await testWin.webContents.session.clearCache(function(){});
@@ -255,6 +257,35 @@ app.on('ready', async () => {
         // Delay after:
         await new Promise(resolve => setTimeout(resolve, delay));
     }
+
+    async function waitForSavedLabel(timeoutMs = 10000, intervalMs = 200) {
+        const start = Date.now();
+
+        while (Date.now() - start < timeoutMs) {
+            const found = await testWin.webContents.executeJavaScript(`
+              (() => {
+                const el = document.querySelector('span.gdrive-sync-label');
+                return el && el.textContent.trim() === 'Saved';
+              })()
+            `);
+
+            if (found) return true; // found the element with "Saved"
+
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        }
+        return false; // timeout
+    }
+
+    async function hasFrameDivs(frameContainer) {
+        return await testWin.webContents.executeJavaScript(`
+            (() => {
+              const container = document.getElementById('${frameContainer}');
+              if (!container) return false;
+              return container.querySelector('.frame-div') !== null;
+            })()
+            `);
+    }
+
 
 
     await testWin.loadURL(editorURL);
@@ -306,31 +337,35 @@ app.on('ready', async () => {
         `);
 
         testWin.webContents.setZoomFactor(zoom);
-        // Clear current code and go up to imports:
-        await sendKey({keyCode: "Delete"}, 100);
-        await sendKey({keyCode: "Delete"}, 100);
-        await sendKey({keyCode: "up"}, 100);
-        await sendKey({keyCode: "up"}, 100);
-        const hasImports = imports != null && imports.length > 0;
-        if (hasImports) {
-            clipboard.writeText(imports.filter(s => s.trim()).join('\n'));
-            //console.log("Pasting imports: " + clipboard.readText());
-            await testWin.webContents.executeJavaScript("document.execCommand('paste');");
 
+        // Tell it we are Playwright to allow using the <input> file selection:
+        await testWin.webContents.executeJavaScript(`window.Playwright = true;`);
+
+        // Show menu and click load project:
+        await testWin.webContents.executeJavaScript(`
+          document.getElementById('showHideMenu')?.click();
+        `);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await testWin.webContents.executeJavaScript(`
+          document.getElementById('loadProjectLink')?.click();
+        `);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        await testWin.webContents.executeJavaScript(`
+          document.getElementById('loadFromFSStrypeButton')?.click();
+        `);
+
+        // Uses handler in preload.js:
+        try {
+            await testWin.webContents.executeJavaScript(`window.electron.setFile(${JSON.stringify('#importFileInput')}, ${JSON.stringify(tempFile)})`);
+        } catch (err) {
+            console.error('Failed to set file:', err);
         }
-        await sendKey({keyCode: "down"}, 100);
-        const hasDefs = defs != null && defs.length > 0;
-        if (hasDefs) {
-            clipboard.writeText(defs.filter(s => s.trim()).join('\n'));
-            //console.log("Pasting defs: " + clipboard.readText());
-            await testWin.webContents.executeJavaScript("document.execCommand('paste');");
-        }
-        await sendKey({keyCode: "down"}, 100);
-        const hasMain = main != null && main.length > 0;
-        if (hasMain) {
-            clipboard.writeText(main.join('\n'));
-            //console.log("Pasting main: " + clipboard.readText());
-            await testWin.webContents.executeJavaScript("document.execCommand('paste');");
+
+        // Wait until Saved indicator shows:
+        const saved = await waitForSavedLabel();
+        if (!saved) {
+            console.log('Timed out waiting for project load');
+            app.exit(-1);
         }
 
         if (navigationCommands != null) {
@@ -339,54 +374,53 @@ app.on('ready', async () => {
             }
         }
 
-        // Need to wait for re-render after adjusting zoom and sending paste:
-        setTimeout(function() {
-            // Scroll to top of page:
-            testWin.webContents.executeJavaScript(`document.getElementById("editorCodeDiv").scrollTo(0, 0)`)
-                .then(() =>new Promise(resolve => setTimeout(resolve, 200)))// allow rendering
-                .then(() => {
+        const hasImports = await hasFrameDivs('frameContainer_-1');
+        const hasDefs = await hasFrameDivs('frameContainer_-2');
+        const hasMain = await hasFrameDivs('frameContainer_-3');
 
-                // Could probably do this simpler, but had problems initially getting more complex objects
-                // back from executeJavaScript, so we do it one primitive number at a time:
-                Promise.all([
+        // Need to wait for re-render after navigating:
+        await new Promise(resolve => setTimeout(resolve, 200));
+        // Scroll to top of page:
+        await testWin.webContents.executeJavaScript(`document.getElementById("editorCodeDiv").scrollTo(0, 0)`);
+        await new Promise(resolve => setTimeout(resolve, 200)); // allow rendering
+        // Could probably do this simpler, but had problems initially getting more complex objects
+        // back from executeJavaScript, so we do it one primitive number at a time:
+        const allBounds = await Promise.all([
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-1', 10)"),
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-2', 10)"),
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-3', -190)"),
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-1 > .container-frames', 0)"),
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-2 > .container-frames', 0)"),
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-3 > .container-frames', 0)"),
-                ])
-                    .then((allBounds) => {
-                        function readBounds(i) {
-                            const bs = allBounds[i].split(";");
-                            return {x: zoom * bs[0], y: zoom * bs[1], width: zoom * bs[2], height: zoom * bs[3]};
-                        }
-                        //console.log("Bounds: " + JSON.stringify(allBounds));
-                        const importWholeBounds = readBounds(0);
-                        const defsWholeBounds = readBounds(1);
-                        const mainWholeBounds = readBounds(2);
-                        const importNarrowBounds = readBounds(3);
-                        const defsNarrowBounds = readBounds(4);
-                        const mainNarrowBounds = readBounds(5);
-                        let boundsToUse = [];
-                        // If we have stuff elsewhere we use whole bounds, otherwise just the container:
-                        if (hasImports) boundsToUse.push(hasDefs || hasMain ? importWholeBounds : importNarrowBounds);
-                        if (hasDefs) boundsToUse.push(hasImports || hasMain ? defsWholeBounds : defsNarrowBounds);
-                        if (hasMain) boundsToUse.push(hasImports || hasDefs ? mainWholeBounds : mainNarrowBounds);
-                        let totalRect = boundsToUse.reduce(getUnion);
-                        //console.log("Capture: " + JSON.stringify(totalRect));
-                        captureRect(testWin, integerRect(totalRect), zoom, destFilename).then(() => {
-                            // If all goes well, we should  output this, the filename written to, on FD 3:
-                            try {
-                                writeSync(3, destFilename);
-                            } catch (err) {
-                            }
-                            testWin.close();
-                            // Exit forces it (unlike app.quit):
-                            app.exit();
-                        });
-                    });
-            });
-        }, 2000);
+                ]);
+        function readBounds(i) {
+            const bs = allBounds[i].split(";");
+            return {x: zoom * bs[0], y: zoom * bs[1], width: zoom * bs[2], height: zoom * bs[3]};
+        }
+        //console.log("Bounds: " + JSON.stringify(allBounds));
+        const importWholeBounds = readBounds(0);
+        const defsWholeBounds = readBounds(1);
+        const mainWholeBounds = readBounds(2);
+        const importNarrowBounds = readBounds(3);
+        const defsNarrowBounds = readBounds(4);
+        const mainNarrowBounds = readBounds(5);
+        let boundsToUse = [];
+        // If we have stuff elsewhere we use whole bounds, otherwise just the container:
+        if (hasImports) boundsToUse.push(hasDefs || hasMain ? importWholeBounds : importNarrowBounds);
+        if (hasDefs) boundsToUse.push(hasImports || hasMain ? defsWholeBounds : defsNarrowBounds);
+        if (hasMain) boundsToUse.push(hasImports || hasDefs ? mainWholeBounds : mainNarrowBounds);
+        let totalRect = boundsToUse.reduce(getUnion);
+        //console.log("Capture: " + JSON.stringify(totalRect));
+        await captureRect(testWin, integerRect(totalRect), zoom, destFilename);
+        // If all goes well, we should  output this, the filename written to, on FD 3:
+        try {
+            writeSync(3, destFilename);
+        }
+        catch (err) {
+            // Windows doesn't support FD 3
+        }
+        testWin.close();
+        // Exit forces it (unlike app.quit):
+        app.exit();
     });
 });
