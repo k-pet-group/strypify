@@ -220,7 +220,7 @@ const allLines = completeSource.trim().split(/\r?\n/);
 app.on('ready', async () => {
     const debugging = false;
     const testWin = new BrowserWindow({
-        width: 1920,
+        width: 600 * zoom,
         height: 1080 * 3,
         // Don't actually show the GUI (can toggle for debugging):
         show: debugging,
