@@ -184,8 +184,9 @@ Asciidoctor::Extensions.register do
   block StrypeSyntaxHighlighter, :strype
 
   postprocessor do
-      #on_backend :html5
       process do |doc, output|
+        next output unless doc.backend == 'html5'
+
         output.gsub(/<img[^>]*src="[^"]+strype-strypify[^"]+-([0-9a-z]+)\.png"[^>]*>/) do |img|
           md5 = Regexp.last_match(1)
           if img.include? 'aria-describedby='
