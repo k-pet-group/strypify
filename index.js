@@ -131,6 +131,8 @@ if (!widthFactor || isNaN(widthFactor)) {
     widthFactor = 1;
 }
 
+const hideErrors = app.commandLine.hasSwitch("hide-errors");
+
 let editorURL = app.commandLine.getSwitchValue("editor-url") || "https://strype.org/editor/";
 if (!(editorURL.startsWith("https:") || editorURL.startsWith("http:"))) {
     if (editorURL.startsWith("localhost")) {
@@ -385,6 +387,18 @@ app.on('ready', async () => {
 
         // Need to wait for re-render after navigating:
         await new Promise(resolve => setTimeout(resolve, 200));
+        // Remove any errors, if requested:
+        if (hideErrors) {
+            // Remove slot underlines:
+            await testWin.webContents.executeJavaScript(`document.querySelectorAll('.error-slot').forEach(el => el.classList.remove('error-slot'));`);
+            // Remove any exclamation mark icons:
+            await testWin.webContents.executeJavaScript(`document.querySelectorAll('.fa-exclamation-triangle').forEach(el => el.remove());`);
+            // And the error navigator:
+            await testWin.webContents.executeJavaScript(`document.querySelectorAll('.error-nav-enabled').forEach(el => el.remove());`);
+            await testWin.webContents.executeJavaScript(`document.querySelectorAll('.error-count-span').forEach(el => el.remove());`);
+            // Re-render:
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
         // Scroll to top of page:
         await testWin.webContents.executeJavaScript(`document.getElementById("editorCodeDiv").scrollTo(0, 0)`);
         await new Promise(resolve => setTimeout(resolve, 200)); // allow rendering
