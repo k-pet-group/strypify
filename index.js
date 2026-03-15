@@ -126,6 +126,11 @@ if (!zoom || isNaN(zoom)) {
     zoom = 2.5;
 }
 
+let widthFactor = parseFloat(app.commandLine.getSwitchValue("width-factor"));
+if (!widthFactor || isNaN(widthFactor)) {
+    widthFactor = 1;
+}
+
 let editorURL = app.commandLine.getSwitchValue("editor-url") || "https://strype.org/editor/";
 if (!(editorURL.startsWith("https:") || editorURL.startsWith("http:"))) {
     if (editorURL.startsWith("localhost")) {
@@ -220,7 +225,7 @@ const allLines = completeSource.trim().split(/\r?\n/);
 app.on('ready', async () => {
     const debugging = false;
     const testWin = new BrowserWindow({
-        width: 600 * zoom,
+        width: 600 * zoom * widthFactor,
         height: 1080 * 3,
         // Don't actually show the GUI (can toggle for debugging):
         show: debugging,
