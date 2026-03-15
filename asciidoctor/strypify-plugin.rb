@@ -77,6 +77,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     strype_url = attrs['strype_url'] || parent.document.attr('strype_url') || 'https://strype.org/editor/'
     open_link = (attrs['open_link'] == 'true' || attrs.values.include?('open_link')) || parent.document.attr('open_link') || nil
     images_dir = parent.document.attr('imagesdir') || ''
+    width_factor = attrs['width_factor'] || parent.document.attr('width_factor') ||  '1'
 
     # Central cache:
     centralImageCacheDirPath = File.join(Dir.home, ".strypify-image-cache")
@@ -125,7 +126,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
 
               unless syntax_err
                   Dir.chdir(imageCacheDirPath){
-                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{justFilename}", "--editor-url=#{strype_url}")
+                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{justFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}")
 
                     unless status.success?
                       return create_block(parent, :paragraph, "Strypify failed (exit #{status.exitstatus}), stdout: #{stdout}, stderr: #{stderr}", {})
