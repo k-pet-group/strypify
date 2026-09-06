@@ -142,6 +142,7 @@ if (!(editorURL.startsWith("https:") || editorURL.startsWith("http:"))) {
         editorURL = "https://" + editorURL;
     }
 }
+editorURL += (editorURL.includes("?") ? "&" : "?") + "purpose=strypify";
 
 let arg = app.commandLine.getSwitchValue("file");
 if (!arg) {
