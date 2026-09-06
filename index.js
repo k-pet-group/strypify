@@ -133,6 +133,12 @@ if (!widthFactor || isNaN(widthFactor)) {
 
 const hideErrors = app.commandLine.hasSwitch("hide-errors");
 
+// If set, we capture the union of every frame (and its nested body) whose header matches
+// one of these comma-separated words (case-insensitive substring), wherever nested
+// (including inside a class), e.g. "duck" matches a frame headed "def duck():", and
+// "duck,goose" captures the union of any frame headed with either word.
+const frameHeaderWords = app.commandLine.getSwitchValue("frame-header-contains");
+
 let editorURL = app.commandLine.getSwitchValue("editor-url") || "https://strype.org/editor/";
 if (!(editorURL.startsWith("https:") || editorURL.startsWith("http:"))) {
     if (editorURL.startsWith("localhost")) {
@@ -341,6 +347,64 @@ app.on('ready', async () => {
     
                 return \`\${union.left};\${union.top};\${union.width};\${union.height}\`;
             };
+
+            // Finds every frame (at any nesting depth, e.g. a method inside a class) whose
+            // header text contains one of the comma-separated searchWords (case-insensitive),
+            // and returns the union of the bounds of those whole frames (header + nested
+            // body), or "" if none matched.
+            window.getFrameBoundsByHeaderWords = (searchWordsCsv, heightAdj) => {
+                const searchWords = searchWordsCsv.split(",").map(w => w.trim().toLowerCase()).filter(w => w);
+                // Matches any frame (block frames like def/class/if, and plain statements
+                // like a function call), at any nesting depth:
+                const frames = document.querySelectorAll('.frame-div');
+                let union = null;
+                for (const frame of frames) {
+                    const idMatch = frame.id.match(/^frame_id_(-?\\d+)$/);
+                    if (!idMatch) continue;
+                    const header = document.getElementById('frameHeader_' + idMatch[1]);
+                    if (!header) continue;
+                    const headerText = Array.from(header.querySelectorAll('.code-slot'))
+                        .map(s => s.textContent).join('').toLowerCase();
+                    if (searchWords.some(w => headerText.includes(w))) {
+                        // Use the frame's own outer rect for top/left/right: it matches the
+                        // visual card edges (border/padding/rounded corners) exactly, the
+                        // way the existing (non-search) capture modes do, and (unlike its
+                        // bottom) is not affected by the min-height filler below.
+                        const outerRect = frame.getBoundingClientRect();
+                        const headerRect = header.getBoundingClientRect();
+                        const frameRect = {
+                            top: outerRect.top,
+                            left: outerRect.left,
+                            right: outerRect.right,
+                            bottom: headerRect.bottom + heightAdj
+                        };
+                        // If the frame has a body, extend down to include its content
+                        // tightly (via .content-children) but not the surrounding
+                        // min-height filler div, which stretches to fill unused space
+                        // in the editor:
+                        const body = document.getElementById('frameBodyId_' + idMatch[1]);
+                        const content = body ? body.querySelector('.content-children') : null;
+                        if (content) {
+                            const contentRect = content.getBoundingClientRect();
+                            if (contentRect.height > 0) {
+                                frameRect.bottom = Math.max(frameRect.bottom, contentRect.bottom + heightAdj);
+                            }
+                        }
+                        if (union === null) {
+                            union = frameRect;
+                        } else {
+                            union.top = Math.min(union.top, frameRect.top);
+                            union.left = Math.min(union.left, frameRect.left);
+                            union.right = Math.max(union.right, frameRect.right);
+                            union.bottom = Math.max(union.bottom, frameRect.bottom);
+                        }
+                    }
+                }
+                if (union === null) return "";
+                const width = union.right - union.left;
+                const height = union.bottom - union.top;
+                return \`\${union.left};\${union.top};\${width};\${height}\`;
+            };
             undefined; // Don't return anything (without this, tries to return function)
         `);
 
@@ -418,18 +482,31 @@ app.on('ready', async () => {
             return {x: zoom * bs[0], y: zoom * bs[1], width: zoom * bs[2], height: zoom * bs[3]};
         }
         //console.log("Bounds: " + JSON.stringify(allBounds));
-        const importWholeBounds = readBounds(0);
-        const defsWholeBounds = readBounds(1);
-        const mainWholeBounds = readBounds(2);
-        const importNarrowBounds = readBounds(3);
-        const defsNarrowBounds = readBounds(4);
-        const mainNarrowBounds = readBounds(5);
-        let boundsToUse = [];
-        // If we have stuff elsewhere we use whole bounds, otherwise just the container:
-        if (hasImports) boundsToUse.push(hasDefs || hasMain ? importWholeBounds : importNarrowBounds);
-        if (hasDefs) boundsToUse.push(hasImports || hasMain ? defsWholeBounds : defsNarrowBounds);
-        if (hasMain) boundsToUse.push(hasImports || hasDefs ? mainWholeBounds : mainNarrowBounds);
-        let totalRect = boundsToUse.reduce(getUnion);
+        let totalRect;
+        if (frameHeaderWords) {
+            const frameBoundsStr = await testWin.webContents.executeJavaScript(
+                `window.getFrameBoundsByHeaderWords(${JSON.stringify(frameHeaderWords)}, 10)`);
+            if (!frameBoundsStr) {
+                console.log("Could not find any frame with a header matching: " + frameHeaderWords);
+                app.exit(-1);
+                return;
+            }
+            const bs = frameBoundsStr.split(";");
+            totalRect = {x: zoom * bs[0], y: zoom * bs[1], width: zoom * bs[2], height: zoom * bs[3]};
+        } else {
+            const importWholeBounds = readBounds(0);
+            const defsWholeBounds = readBounds(1);
+            const mainWholeBounds = readBounds(2);
+            const importNarrowBounds = readBounds(3);
+            const defsNarrowBounds = readBounds(4);
+            const mainNarrowBounds = readBounds(5);
+            let boundsToUse = [];
+            // If we have stuff elsewhere we use whole bounds, otherwise just the container:
+            if (hasImports) boundsToUse.push(hasDefs || hasMain ? importWholeBounds : importNarrowBounds);
+            if (hasDefs) boundsToUse.push(hasImports || hasMain ? defsWholeBounds : defsNarrowBounds);
+            if (hasMain) boundsToUse.push(hasImports || hasDefs ? mainWholeBounds : mainNarrowBounds);
+            totalRect = boundsToUse.reduce(getUnion);
+        }
         //console.log("Capture: " + JSON.stringify(totalRect));
         await captureRect(testWin, integerRect(totalRect), zoom, destFilename);
         // If all goes well, we should  output this, the filename written to, on FD 3:

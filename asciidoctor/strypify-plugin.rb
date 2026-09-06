@@ -78,6 +78,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     open_link = (attrs['open_link'] == 'true' || attrs.values.include?('open_link')) || parent.document.attr('open_link') || nil
     images_dir = parent.document.attr('imagesdir') || ''
     width_factor = attrs['width_factor'] || parent.document.attr('width_factor') ||  '1'
+    frame_header_contains = attrs['frame_header_contains'] || parent.document.attr('frame_header_contains') || ''
 
     # Central cache:
     centralImageCacheDirPath = File.join(Dir.home, ".strypify-image-cache")
@@ -90,7 +91,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     unless File.directory?(imageCacheDirPath)
       FileUtils.mkdir_p(imageCacheDirPath)
     end
-    md5 = Digest::MD5.hexdigest(src + width_factor)
+    md5 = Digest::MD5.hexdigest(src + width_factor + frame_header_contains)
     justFilename = "strype-strypify#{VERSION}-#{md5}.png"
     localFilename = "#{imageCacheDirPath}/#{justFilename}"
     relativeFilename = "#{imageCacheDirName}/#{justFilename}"
@@ -126,7 +127,8 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
 
               unless syntax_err
                   Dir.chdir(imageCacheDirPath){
-                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{justFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}")
+                    frame_header_opt = frame_header_contains.empty? ? [] : ["--frame-header-contains=#{frame_header_contains}"]
+                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{justFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
 
                     unless status.success?
                       return create_block(parent, :paragraph, "Strypify failed (exit #{status.exitstatus}), stdout: #{stdout}, stderr: #{stderr}", {})

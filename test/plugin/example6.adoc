@@ -1,0 +1,14 @@
+Only part of the class is captured, using frame_header_contains:
+
+[strype,frame_header_contains="quack,swim"]
+----
+class Duck:
+    def quack(self):
+        print("Quack")
+
+    def waddle(self):
+        print("Waddle")
+
+    def swim(self):
+        print("Swim")
+----
