@@ -73,6 +73,8 @@ async function captureRect(win, rect, zoom, outputFile) {
         // Scroll to the vertical position (converting back into CSS Pixels)
         await wc.executeJavaScript(`document.getElementById("editorCodeDiv").scrollTo(0, ${targetScrollY / zoom})`);
         await new Promise(resolve => setTimeout(resolve, 200)); // allow rendering
+        // Make sure the scroll has actually been painted before we capture:
+        await wc.executeJavaScript(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))`);
 
         const actualScrollY = await wc.executeJavaScript("document.getElementById('editorCodeDiv').scrollTop") * zoom;
 
@@ -469,7 +471,9 @@ app.on('ready', async () => {
         await new Promise(resolve => setTimeout(resolve, 200)); // allow rendering
         // Could probably do this simpler, but had problems initially getting more complex objects
         // back from executeJavaScript, so we do it one primitive number at a time:
-        const allBounds = await Promise.all([
+        // Layout may still be settling after the scroll/navigation, so keep reading the
+        // bounds until two consecutive reads agree (or we give up after a couple of seconds):
+        const readAllBounds = () => Promise.all([
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-1', 10)"),
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-2', 10)"),
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-3', -190)"),
@@ -477,6 +481,14 @@ app.on('ready', async () => {
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-2 > .container-frames', 0)"),
                     testWin.webContents.executeJavaScript("window.getUnionBoundsAsSemiStr('#frameContainer_-3 > .container-frames', 0)"),
                 ]);
+        let allBounds = await readAllBounds();
+        for (let attempt = 0; attempt < 20; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const next = await readAllBounds();
+            const stable = JSON.stringify(next) === JSON.stringify(allBounds);
+            allBounds = next;
+            if (stable) break;
+        }
         function readBounds(i) {
             const bs = allBounds[i].split(";");
             return {x: zoom * bs[0], y: zoom * bs[1], width: zoom * bs[2], height: zoom * bs[3]};
