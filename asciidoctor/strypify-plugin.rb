@@ -155,7 +155,14 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
                     begin
                       stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{tempOutputFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
 
-                      unless status.success?
+                      # Judge success by whether a real output file was written, not by the
+                      # process exit status: on some headless Linux hosts, Strypify/Electron
+                      # can crash during its own window/GTK teardown *after* it has already
+                      # written the output file, which makes the process exit non-zero despite
+                      # having done its job correctly. Treating that as a build failure would
+                      # be a false positive, so only a missing/empty output file is a real
+                      # failure here.
+                      unless File.file?(tempOutputFilename) && File.size(tempOutputFilename) > 0
                         raise "Strypify failed (exit #{status.exitstatus}) for Strype block #{line_info}, stdout: #{stdout}, stderr: #{stderr}"
                       end
                       sleep(1)
