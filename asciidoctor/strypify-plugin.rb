@@ -6,6 +6,7 @@ require 'zlib'
 require 'base64'
 require 'open3'
 require 'securerandom'
+require 'shellwords'
 
 HOST_OS = RbConfig::CONFIG['host_os']
 STRYPIFY_CMD =
@@ -58,11 +59,23 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     # If no Python, return nil (assume valid)
     return nil unless python_cmd
 
-    # 2. Try syntax check. PYTHONDONTWRITEBYTECODE avoids py_compile writing a
-    # .pyc into a shared pycache dir (e.g. /tmp/pycache) -- a write there can
-    # fail with a permission error unrelated to the actual Python syntax,
-    # which would otherwise be misreported below as an "Invalid Python" error.
-    output = `PYTHONDONTWRITEBYTECODE=1 #{python_cmd} -m py_compile #{file} 2>&1`
+    # 2. Try syntax check. Deliberately use ast.parse rather than `-m py_compile`:
+    # py_compile's whole purpose is to write a .pyc, and it does so into a shared
+    # pycache dir regardless of PYTHONDONTWRITEBYTECODE (that variable only
+    # suppresses bytecode caching for normal script execution/import, not an
+    # explicit py_compile call). A write there can fail with a permission error
+    # unrelated to the actual Python syntax, which would otherwise be
+    # misreported below as an "Invalid Python" error. ast.parse performs the
+    # same syntax check with no filesystem side effects at all.
+    ast_check = <<~PYTHON
+      import ast, sys, traceback
+      try:
+          ast.parse(open(sys.argv[1], 'rb').read(), filename=sys.argv[1])
+      except SyntaxError as e:
+          sys.stderr.write(''.join(traceback.format_exception_only(e)))
+          sys.exit(1)
+    PYTHON
+    output = `#{python_cmd} -c #{ast_check.shellescape} #{file} 2>&1`
     return nil if $?.success?
 
     # 3. Return the error output
