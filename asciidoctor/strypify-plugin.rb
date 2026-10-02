@@ -5,6 +5,8 @@ require 'rbconfig'
 require 'zlib'
 require 'base64'
 require 'open3'
+require 'securerandom'
+require 'shellwords'
 
 HOST_OS = RbConfig::CONFIG['host_os']
 STRYPIFY_CMD =
@@ -15,6 +17,13 @@ STRYPIFY_CMD =
   else
     "strypify-headless.sh"
   end
+
+# On Linux (headless, via xvfb-run), Strypify/Electron startup can in rare
+# cases hang outright rather than crash, and Open3.capture3 has no timeout
+# of its own -- a hang there would block the whole build forever. Wrap with
+# the standard `timeout` utility (present on any Linux CI/production host
+# this realistically runs on) so a genuine hang fails loudly instead.
+STRYPIFY_TIMEOUT_PREFIX = (HOST_OS =~ /darwin|mswin|mingw|cygwin/) ? [] : ["timeout", "--signal=KILL", "300"]
 
 VERSION = %x(#{STRYPIFY_CMD} --version).strip
 
@@ -57,8 +66,23 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     # If no Python, return nil (assume valid)
     return nil unless python_cmd
 
-    # 2. Try syntax check
-    output = `#{python_cmd} -m py_compile #{file} 2>&1`
+    # 2. Try syntax check. Deliberately use ast.parse rather than `-m py_compile`:
+    # py_compile's whole purpose is to write a .pyc, and it does so into a shared
+    # pycache dir regardless of PYTHONDONTWRITEBYTECODE (that variable only
+    # suppresses bytecode caching for normal script execution/import, not an
+    # explicit py_compile call). A write there can fail with a permission error
+    # unrelated to the actual Python syntax, which would otherwise be
+    # misreported below as an "Invalid Python" error. ast.parse performs the
+    # same syntax check with no filesystem side effects at all.
+    ast_check = <<~PYTHON
+      import ast, sys, traceback
+      try:
+          ast.parse(open(sys.argv[1], 'rb').read(), filename=sys.argv[1])
+      except SyntaxError as e:
+          sys.stderr.write(''.join(traceback.format_exception_only(e)))
+          sys.exit(1)
+    PYTHON
+    output = `#{python_cmd} -c #{ast_check.shellescape} #{file} 2>&1`
     return nil if $?.success?
 
     # 3. Return the error output
@@ -128,17 +152,38 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
               unless syntax_err
                   Dir.chdir(imageCacheDirPath){
                     frame_header_opt = frame_header_contains.empty? ? [] : ["--frame-header-contains=#{frame_header_contains}"]
-                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{justFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
+                    # Render to a per-call unique filename rather than directly to justFilename:
+                    # two concurrent asciidoctor processes can end up rendering the same
+                    # (identically-hashed) code block at once, and since the content is
+                    # identical either render is equally valid, so there is no need to make
+                    # them contend for the same output path -- just let whichever finishes
+                    # first move its result into place.
+                    # Keep the .png suffix (rather than appending after it) -- Strypify
+                    # may branch on the output file's extension internally.
+                    tempOutputFilename = "#{justFilename.sub(/\.png\z/, '')}-tmp-#{Process.pid}-#{SecureRandom.hex(8)}.png"
+                    begin
+                      stdout, stderr, status = Open3.capture3(*STRYPIFY_TIMEOUT_PREFIX, STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{tempOutputFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
 
-                    unless status.success?
-                      return create_block(parent, :paragraph, "Strypify failed (exit #{status.exitstatus}), stdout: #{stdout}, stderr: #{stderr}", {})
+                      # Judge success by whether a real output file was written, not by the
+                      # process exit status: on some headless Linux hosts, Strypify/Electron
+                      # can crash during its own window/GTK teardown *after* it has already
+                      # written the output file, which makes the process exit non-zero despite
+                      # having done its job correctly. Treating that as a build failure would
+                      # be a false positive, so only a missing/empty output file is a real
+                      # failure here.
+                      unless File.file?(tempOutputFilename) && File.size(tempOutputFilename) > 0
+                        raise "Strypify failed (exit #{status.exitstatus}) for Strype block #{line_info}, stdout: #{stdout}, stderr: #{stderr}"
+                      end
+                      sleep(1)
+                      FileUtils.mv(tempOutputFilename, justFilename)
+                    ensure
+                      File.delete(tempOutputFilename) if File.file?(tempOutputFilename)
                     end
-                    sleep(1)
                     # Copy it to central cache, since it wasn't there:
                     FileUtils.cp(justFilename, centralFilename)
                   }
               else
-                return create_block(parent, :paragraph, "Invalid Python: " + syntax_err.gsub(file.path, "Strype block #{line_info}"), {})
+                raise "Invalid Python in Strype block #{line_info}: " + syntax_err.gsub(file.path, "Strype block #{line_info}")
               end
 
             ensure
