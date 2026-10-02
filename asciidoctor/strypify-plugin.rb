@@ -18,6 +18,13 @@ STRYPIFY_CMD =
     "strypify-headless.sh"
   end
 
+# On Linux (headless, via xvfb-run), Strypify/Electron startup can in rare
+# cases hang outright rather than crash, and Open3.capture3 has no timeout
+# of its own -- a hang there would block the whole build forever. Wrap with
+# the standard `timeout` utility (present on any Linux CI/production host
+# this realistically runs on) so a genuine hang fails loudly instead.
+STRYPIFY_TIMEOUT_PREFIX = (HOST_OS =~ /darwin|mswin|mingw|cygwin/) ? [] : ["timeout", "--signal=KILL", "300"]
+
 VERSION = %x(#{STRYPIFY_CMD} --version).strip
 
 class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
@@ -151,9 +158,11 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
                     # identical either render is equally valid, so there is no need to make
                     # them contend for the same output path -- just let whichever finishes
                     # first move its result into place.
-                    tempOutputFilename = "#{justFilename}.tmp-#{Process.pid}-#{SecureRandom.hex(8)}"
+                    # Keep the .png suffix (rather than appending after it) -- Strypify
+                    # may branch on the output file's extension internally.
+                    tempOutputFilename = "#{justFilename.sub(/\.png\z/, '')}-tmp-#{Process.pid}-#{SecureRandom.hex(8)}.png"
                     begin
-                      stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{tempOutputFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
+                      stdout, stderr, status = Open3.capture3(*STRYPIFY_TIMEOUT_PREFIX, STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{tempOutputFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
 
                       # Judge success by whether a real output file was written, not by the
                       # process exit status: on some headless Linux hosts, Strypify/Electron
