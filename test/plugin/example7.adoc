@@ -1,0 +1,8 @@
+Strype code with a different syntax error (missing colon):
+
+[strype]
+----
+print("Hello")
+if True
+    doSomething()
+----
