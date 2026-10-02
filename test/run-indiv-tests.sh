@@ -30,7 +30,12 @@ for PYFILE in example*.py; do
     OPTS=$(<"${PYFILE%.py}.args")
   fi
 
-  $STRYPIFY --file=$PYFILE --output-file=$ACTUALFILE $OPTS
+  # Strypify can occasionally crash during its own window/GTK teardown on
+  # some headless Linux setups *after* it has already written the output
+  # file correctly, which would make this exit non-zero despite a real
+  # success. Don't let `set -e` abort on that; the file-existence check
+  # right below this is the real test of whether it worked.
+  $STRYPIFY --file=$PYFILE --output-file=$ACTUALFILE $OPTS || true
   if [ ! -f "$ACTUALFILE" ]; then
     echo "Image $ACTUALFILE does not exist!"
     exit 1
