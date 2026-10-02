@@ -162,17 +162,36 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
                     # may branch on the output file's extension internally.
                     tempOutputFilename = "#{justFilename.sub(/\.png\z/, '')}-tmp-#{Process.pid}-#{SecureRandom.hex(8)}.png"
                     begin
-                      stdout, stderr, status = Open3.capture3(*STRYPIFY_TIMEOUT_PREFIX, STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{tempOutputFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
+                      # Headless Strypify can occasionally fail a single render outright on
+                      # some hosts (no output file produced at all, exit status set but with
+                      # no stdout/stderr -- strypify-headless.sh discards Electron's own
+                      # diagnostics, so the real cause isn't visible here). Retry a couple of
+                      # times before giving up, since a repeat attempt is cheap and these
+                      # failures have been transient in practice.
+                      max_attempts = 3
+                      produced = false
+                      stdout = stderr = ""
+                      status = nil
+                      attempts = 0
+                      until produced || attempts >= max_attempts
+                        attempts += 1
+                        stdout, stderr, status = Open3.capture3(*STRYPIFY_TIMEOUT_PREFIX, STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{tempOutputFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
 
-                      # Judge success by whether a real output file was written, not by the
-                      # process exit status: on some headless Linux hosts, Strypify/Electron
-                      # can crash during its own window/GTK teardown *after* it has already
-                      # written the output file, which makes the process exit non-zero despite
-                      # having done its job correctly. Treating that as a build failure would
-                      # be a false positive, so only a missing/empty output file is a real
-                      # failure here.
-                      unless File.file?(tempOutputFilename) && File.size(tempOutputFilename) > 0
-                        raise "Strypify failed (exit #{status.exitstatus}) for Strype block #{line_info}, stdout: #{stdout}, stderr: #{stderr}"
+                        # Judge success by whether a real output file was written, not by the
+                        # process exit status: on some headless Linux hosts, Strypify/Electron
+                        # can crash during its own window/GTK teardown *after* it has already
+                        # written the output file, which makes the process exit non-zero despite
+                        # having done its job correctly. Treating that as a build failure would
+                        # be a false positive, so only a missing/empty output file is a real
+                        # failure here.
+                        produced = File.file?(tempOutputFilename) && File.size(tempOutputFilename) > 0
+                        if !produced
+                          File.delete(tempOutputFilename) if File.file?(tempOutputFilename)
+                          sleep(2) if attempts < max_attempts
+                        end
+                      end
+                      unless produced
+                        raise "Strypify failed (exit #{status.exitstatus}) for Strype block #{line_info} after #{attempts} attempts, stdout: #{stdout}, stderr: #{stderr}"
                       end
                       sleep(1)
                       FileUtils.mv(tempOutputFilename, justFilename)
