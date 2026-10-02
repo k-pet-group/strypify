@@ -57,8 +57,11 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
     # If no Python, return nil (assume valid)
     return nil unless python_cmd
 
-    # 2. Try syntax check
-    output = `#{python_cmd} -m py_compile #{file} 2>&1`
+    # 2. Try syntax check. PYTHONDONTWRITEBYTECODE avoids py_compile writing a
+    # .pyc into a shared pycache dir (e.g. /tmp/pycache) -- a write there can
+    # fail with a permission error unrelated to the actual Python syntax,
+    # which would otherwise be misreported below as an "Invalid Python" error.
+    output = `PYTHONDONTWRITEBYTECODE=1 #{python_cmd} -m py_compile #{file} 2>&1`
     return nil if $?.success?
 
     # 3. Return the error output
@@ -131,14 +134,14 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
                     stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{justFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
 
                     unless status.success?
-                      return create_block(parent, :paragraph, "Strypify failed (exit #{status.exitstatus}), stdout: #{stdout}, stderr: #{stderr}", {})
+                      raise "Strypify failed (exit #{status.exitstatus}) for Strype block #{line_info}, stdout: #{stdout}, stderr: #{stderr}"
                     end
                     sleep(1)
                     # Copy it to central cache, since it wasn't there:
                     FileUtils.cp(justFilename, centralFilename)
                   }
               else
-                return create_block(parent, :paragraph, "Invalid Python: " + syntax_err.gsub(file.path, "Strype block #{line_info}"), {})
+                raise "Invalid Python in Strype block #{line_info}: " + syntax_err.gsub(file.path, "Strype block #{line_info}")
               end
 
             ensure
