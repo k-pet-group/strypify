@@ -5,6 +5,7 @@ require 'rbconfig'
 require 'zlib'
 require 'base64'
 require 'open3'
+require 'securerandom'
 
 HOST_OS = RbConfig::CONFIG['host_os']
 STRYPIFY_CMD =
@@ -131,12 +132,24 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
               unless syntax_err
                   Dir.chdir(imageCacheDirPath){
                     frame_header_opt = frame_header_contains.empty? ? [] : ["--frame-header-contains=#{frame_header_contains}"]
-                    stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{justFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
+                    # Render to a per-call unique filename rather than directly to justFilename:
+                    # two concurrent asciidoctor processes can end up rendering the same
+                    # (identically-hashed) code block at once, and since the content is
+                    # identical either render is equally valid, so there is no need to make
+                    # them contend for the same output path -- just let whichever finishes
+                    # first move its result into place.
+                    tempOutputFilename = "#{justFilename}.tmp-#{Process.pid}-#{SecureRandom.hex(8)}"
+                    begin
+                      stdout, stderr, status = Open3.capture3(STRYPIFY_CMD, "--file=#{file.path}", "--output-file=#{tempOutputFilename}", "--editor-url=#{strype_url}", "--hide-errors", "--width-factor=#{width_factor}", *frame_header_opt)
 
-                    unless status.success?
-                      raise "Strypify failed (exit #{status.exitstatus}) for Strype block #{line_info}, stdout: #{stdout}, stderr: #{stderr}"
+                      unless status.success?
+                        raise "Strypify failed (exit #{status.exitstatus}) for Strype block #{line_info}, stdout: #{stdout}, stderr: #{stderr}"
+                      end
+                      sleep(1)
+                      FileUtils.mv(tempOutputFilename, justFilename)
+                    ensure
+                      File.delete(tempOutputFilename) if File.file?(tempOutputFilename)
                     end
-                    sleep(1)
                     # Copy it to central cache, since it wasn't there:
                     FileUtils.cp(justFilename, centralFilename)
                   }
