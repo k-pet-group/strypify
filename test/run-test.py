@@ -10,7 +10,7 @@ h2 = imagehash.phash(Image.open(actual))
 
 print("Hamming distance:", h1 - h2)
 
-if (h1 - h2) < 25:
+if (h1 - h2) < int(os.environ.get('IMAGE_DISTANCE_THRESHOLD') or 25):
     print(f"Images are nearly identical {h1 - h2}")
 else:
     raise Exception(f"Image is too different from expected (distance {h1 - h2})")

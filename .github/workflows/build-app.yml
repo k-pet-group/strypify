@@ -128,14 +128,17 @@ jobs:
             artifact: Strypify-linux-x64
             # Directory (relative to the repo root) that contains the Strypify executable once unpacked:
             bindir: artifact/Strypify-linux-x64
+            image-threshold: 25
           - name: Windows
             os: windows-latest
             artifact: Strypify-windows-x64
             bindir: artifact/Strypify-win32-x64
+            image-threshold: 40
           - name: macOS
             os: macos-latest
             artifact: Strypify-mac-aarch
             bindir: artifact/Strypify.app/Contents/MacOS
+            image-threshold: 40
     defaults:
       run:
         shell: bash
@@ -165,6 +168,11 @@ jobs:
       if: runner.os == 'Linux'
       run: sudo apt-get install -y xvfb
 
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
     - name: Install Python packages
       run: |
         python3 -m pip install --upgrade pip || python -m pip install --upgrade pip
@@ -172,6 +180,9 @@ jobs:
 
     - name: Run Strypify and check image
       working-directory: test
+      env:
+        # Reference images are renders from one platform; allow more drift elsewhere:
+        IMAGE_DISTANCE_THRESHOLD: ${{ matrix.image-threshold }}
       run: |
         ls -lrt "../${{ matrix.bindir }}/"
         export PATH="$(realpath "../${{ matrix.bindir }}/"):$PATH"
