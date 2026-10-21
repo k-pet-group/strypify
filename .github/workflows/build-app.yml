@@ -153,7 +153,7 @@ jobs:
       run: |
         case "$RUNNER_OS" in
           Linux)   unzip artifact/Strypify-linux-x64.zip -d ./artifact ;;
-          Windows) powershell -Command "Expand-Archive -Path artifact/Strypify-windows-x64.zip -DestinationPath artifact" ;;
+          Windows) powershell -Command "Expand-Archive -Path artifact/Strypify-win32-x64.zip -DestinationPath artifact" ;;
           macOS)   ditto -x -k artifact/Strypify-macos-aarch64.zip ./artifact ;;
         esac
 
