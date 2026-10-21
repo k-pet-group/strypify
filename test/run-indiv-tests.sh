@@ -35,7 +35,14 @@ for PYFILE in example*.py; do
   # file correctly, which would make this exit non-zero despite a real
   # success. Don't let `set -e` abort on that; the file-existence check
   # right below this is the real test of whether it worked.
-  $STRYPIFY --file=$PYFILE --output-file=$ACTUALFILE $OPTS || true
+  # Strypify can also occasionally fail to produce any output at all on a
+  # given run, so retry a couple of times before giving up.
+  for ATTEMPT in 1 2 3; do
+    $STRYPIFY --file=$PYFILE --output-file=$ACTUALFILE $OPTS || true
+    [ -f "$ACTUALFILE" ] && break
+    echo "Attempt $ATTEMPT did not produce $ACTUALFILE"
+    sleep 2
+  done
   if [ ! -f "$ACTUALFILE" ]; then
     echo "Image $ACTUALFILE does not exist!"
     exit 1

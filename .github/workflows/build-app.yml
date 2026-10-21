@@ -113,8 +113,32 @@ jobs:
             asciidoctor/strypify-plugin.rb            
 
   Test:
-    runs-on: ubuntu-latest
-    needs: Build-Ubuntu-x64
+    name: Test (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    needs:
+      - Build-Ubuntu-x64
+      - Build-Windows-x64
+      - Build-Mac-App-Aarch
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu
+            os: ubuntu-latest
+            artifact: Strypify-linux-x64
+            # Directory (relative to the repo root) that contains the Strypify executable once unpacked:
+            bindir: artifact/Strypify-linux-x64
+          - name: Windows
+            os: windows-latest
+            artifact: Strypify-windows-x64
+            bindir: artifact/Strypify-win32-x64
+          - name: macOS
+            os: macos-latest
+            artifact: Strypify-mac-aarch
+            bindir: artifact/Strypify.app/Contents/MacOS
+    defaults:
+      run:
+        shell: bash
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -122,48 +146,87 @@ jobs:
     - name: Download Strypify artifact
       uses: actions/download-artifact@v4
       with:
-        name: Strypify-linux-x64
+        name: ${{ matrix.artifact }}
         path: ./artifact
 
     - name: Unzip Strypify
-      run: unzip artifact/Strypify-linux-x64.zip -d ./artifact
+      run: |
+        case "$RUNNER_OS" in
+          Linux)   unzip artifact/Strypify-linux-x64.zip -d ./artifact ;;
+          Windows) powershell -Command "Expand-Archive -Path artifact/Strypify-win32-x64.zip -DestinationPath artifact" ;;
+          macOS)   ditto -x -k artifact/Strypify-macos-aarch64.zip ./artifact ;;
+        esac
 
     - name: Ensure Strypify is executable
+      if: runner.os == 'Linux'
       run: chmod +x ./artifact/Strypify-linux-x64/Strypify
 
-    - name: Install Xvfb and Python
-      run: |
-        sudo apt install xvfb
-        python3 -m pip install --upgrade pip
-        pip install Pillow
-        pip install imagehash
+    - name: Install Xvfb
+      if: runner.os == 'Linux'
+      run: sudo apt-get install -y xvfb
 
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install Python packages
+      run: |
+        python3 -m pip install --upgrade pip || python -m pip install --upgrade pip
+        python3 -m pip install Pillow imagehash || python -m pip install Pillow imagehash
+
+    # The reference images are renders from one platform, so the pixel comparison is Linux-only.
+    # (The plugin test below compares HTML, so runs everywhere.)
     - name: Run Strypify and check image
-      shell: bash
+      if: runner.os == 'Linux'
       working-directory: test
       run: |
-        ls -lrt ../artifact/Strypify-linux-x64/
-        export PATH="$(realpath "../artifact/Strypify-linux-x64/"):$PATH"
+        ls -lrt "../${{ matrix.bindir }}/"
+        export PATH="$(realpath "../${{ matrix.bindir }}/"):$PATH"
         bash ./run-indiv-tests.sh
     - name: Upload generated images if tests failed
-      if: failure()  # only runs if previous step failed
+      if: failure() && runner.os == 'Linux'  # only runs if previous step failed
       uses: actions/upload-artifact@v4
       with:
-        name: failed-images
-        path: 'test/strype*.png'
+        name: failed-images-${{ matrix.name }}
+        path: 'test/actual-*.png'
 
-    - name: Install dependencies for plugin test
+    - name: Install dependencies for plugin test (Linux)
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update -y
-        sudo apt-get install -y ruby-full wget unzip xvfb
+        sudo apt-get install -y ruby-full wget unzip xvfb libxml2-utils
         sudo gem install asciidoctor
         sudo gem install asciidoctor-pdf
+    - name: Install dependencies for plugin test (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        gem install asciidoctor
+        gem install asciidoctor-pdf
+        # The plugin looks for Strypify in this fixed location on macOS:
+        cp -R artifact/Strypify.app /Applications/Strypify.app
+    - name: Install dependencies for plugin test (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        gem install asciidoctor
+        gem install asciidoctor-pdf
+        # The test scripts use xmllint, which is not included with Git Bash:
+        choco install xsltproc --no-progress -y
     - name: Test plugin output
       working-directory: test/plugin
       run: |
-        ls -lrt ../../artifact/Strypify-linux-x64/
-        export PATH="$(realpath "../../artifact/Strypify-linux-x64/"):$PATH" 
+        ls -lrt "../../${{ matrix.bindir }}/"
+        export PATH="$(realpath "../../${{ matrix.bindir }}/"):$PATH"
         bash ./run-test.sh
+    - name: Upload plugin output if tests failed
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: failed-plugin-output-${{ matrix.name }}
+        path: |
+          test/plugin/*.html
+          test/plugin/*.log
+
   Validate-Version:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')   # only run for version tags

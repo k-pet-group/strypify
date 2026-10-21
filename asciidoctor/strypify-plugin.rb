@@ -82,8 +82,10 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
           sys.stderr.write(''.join(traceback.format_exception_only(e)))
           sys.exit(1)
     PYTHON
-    output = `#{python_cmd} -c #{ast_check.shellescape} #{file} 2>&1`
-    return nil if $?.success?
+    # Pass arguments as an array (no shell): shellescape's POSIX quoting is mangled by
+    # cmd.exe on Windows, which made every check fail with empty output.
+    output, status = Open3.capture2e(python_cmd, '-c', ast_check, file)
+    return nil if status.success?
 
     # 3. Return the error output
     output.strip
