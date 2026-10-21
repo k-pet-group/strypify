@@ -128,17 +128,14 @@ jobs:
             artifact: Strypify-linux-x64
             # Directory (relative to the repo root) that contains the Strypify executable once unpacked:
             bindir: artifact/Strypify-linux-x64
-            image-threshold: 25
           - name: Windows
             os: windows-latest
             artifact: Strypify-windows-x64
             bindir: artifact/Strypify-win32-x64
-            image-threshold: 40
           - name: macOS
             os: macos-latest
             artifact: Strypify-mac-aarch
             bindir: artifact/Strypify.app/Contents/MacOS
-            image-threshold: 40
     defaults:
       run:
         shell: bash
@@ -178,17 +175,17 @@ jobs:
         python3 -m pip install --upgrade pip || python -m pip install --upgrade pip
         python3 -m pip install Pillow imagehash || python -m pip install Pillow imagehash
 
+    # The reference images are renders from one platform, so the pixel comparison is Linux-only.
+    # (The plugin test below compares HTML, so runs everywhere.)
     - name: Run Strypify and check image
+      if: runner.os == 'Linux'
       working-directory: test
-      env:
-        # Reference images are renders from one platform; allow more drift elsewhere:
-        IMAGE_DISTANCE_THRESHOLD: ${{ matrix.image-threshold }}
       run: |
         ls -lrt "../${{ matrix.bindir }}/"
         export PATH="$(realpath "../${{ matrix.bindir }}/"):$PATH"
         bash ./run-indiv-tests.sh
     - name: Upload generated images if tests failed
-      if: failure()  # only runs if previous step failed
+      if: failure() && runner.os == 'Linux'  # only runs if previous step failed
       uses: actions/upload-artifact@v4
       with:
         name: failed-images-${{ matrix.name }}
