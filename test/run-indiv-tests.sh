@@ -19,6 +19,19 @@ echo Strypify: $STRYPIFY
 PYTHON=$(command -v python3 || command -v python)
 echo Python: $PYTHON
 
+# Per-attempt limit, so a stalled Strypify launch fails (and is retried) quickly rather than
+# eating minutes of CI time. A normal render takes around 10 seconds.
+STRYPIFY_TIMEOUT=${STRYPIFY_TIMEOUT:-90}
+run_limited() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout -k 5 "$STRYPIFY_TIMEOUT" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout -k 5 "$STRYPIFY_TIMEOUT" "$@"
+  else
+    "$@"
+  fi
+}
+
 for PYFILE in example*.py; do
   echo Testing: $PYFILE
   EXPECTEDFILE="expected-${PYFILE%.py}.png"
@@ -38,9 +51,10 @@ for PYFILE in example*.py; do
   # Strypify can also occasionally fail to produce any output at all on a
   # given run, so retry a couple of times before giving up.
   for ATTEMPT in 1 2 3; do
-    $STRYPIFY --file=$PYFILE --output-file=$ACTUALFILE $OPTS || true
+    ATTEMPT_START=$SECONDS
+    run_limited $STRYPIFY --file=$PYFILE --output-file=$ACTUALFILE $OPTS || echo "Attempt $ATTEMPT exited with status $? after $((SECONDS - ATTEMPT_START))s"
     [ -f "$ACTUALFILE" ] && break
-    echo "Attempt $ATTEMPT did not produce $ACTUALFILE"
+    echo "Attempt $ATTEMPT did not produce $ACTUALFILE (after $((SECONDS - ATTEMPT_START))s)"
     sleep 2
   done
   if [ ! -f "$ACTUALFILE" ]; then
