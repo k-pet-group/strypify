@@ -115,6 +115,7 @@ jobs:
   Test:
     name: Test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     needs:
       - Build-Ubuntu-x64
       - Build-Windows-x64

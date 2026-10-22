@@ -3,6 +3,16 @@
 echo $PATH
 set -e
 
+# Per-example limit so a hung Strypify launch fails fast instead of stalling CI.
+# (macOS runners have no `timeout`, so fall back to running without one there.)
+run_limited() {
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 180 "$@"
+    else
+        "$@"
+    fi
+}
+
 rm -rf ./.image-cache
 rm -rf ~/.strypify-image-cache/
 
@@ -19,7 +29,7 @@ for src in example*.adoc; do
     echo Running asciidoctor $src
 
     if [[ -f "$failmarker" ]]; then
-        if asciidoctor -I../../asciidoctor -r strypify-plugin "$src" --trace \
+        if run_limited asciidoctor -I../../asciidoctor -r strypify-plugin "$src" --trace \
             > "${base}.stdout.log" 2> "${base}.stderr.log"; then
             echo "Expected $src to fail the build, but asciidoctor succeeded!"
             exit 1
@@ -33,7 +43,10 @@ for src in example*.adoc; do
         continue
     fi
 
-    asciidoctor -I../../asciidoctor -r strypify-plugin "$src" --trace
+    run_limited asciidoctor -I../../asciidoctor -r strypify-plugin "$src" --trace || {
+        echo "asciidoctor failed or timed out (exit $?) on $src"
+        exit 1
+    }
 
     bash ./diff-html-body.sh "$expected" "$output" || {
         echo "Files for $base differ!"
