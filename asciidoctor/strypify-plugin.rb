@@ -23,16 +23,26 @@ STRYPIFY_CMD =
 # of its own -- a hang there would block the whole build forever. Wrap with
 # the standard `timeout` utility (present on any Linux CI/production host
 # this realistically runs on) so a genuine hang fails loudly instead.
-STRYPIFY_TIMEOUT_PREFIX = (HOST_OS =~ /darwin|mswin|mingw|cygwin/) ? [] : ["timeout", "--signal=KILL", "300"]
+# A normal render takes ~10s (up to ~20s for a cold start), but startup under
+# Xvfb occasionally stalls and then succeeds on a retry, so the limit is kept
+# short (override with STRYPIFY_TIMEOUT) and each stall is retried below.
+STRYPIFY_TIMEOUT_SECS = (ENV['STRYPIFY_TIMEOUT'] || '60')
+STRYPIFY_TIMEOUT_PREFIX = (HOST_OS =~ /darwin|mswin|mingw|cygwin/) ? [] : ["timeout", "--signal=KILL", STRYPIFY_TIMEOUT_SECS]
 
 # `--version` has occasionally come back empty on a loaded CI host (its
 # stderr is discarded by strypify-headless.sh, so a transient Xvfb failure
 # is invisible here) -- that silently corrupted every cache filename and
 # broke the aria-describedby postprocessor regex below for the whole build.
 # Retry once, then fail loudly rather than quietly continuing with "".
+# The call is also given the timeout, since a stalled launch here would otherwise
+# block the whole build with no output; a stall just counts as an empty result.
 VERSION = begin
-  result = %x(#{STRYPIFY_CMD} --version).strip
-  result = %x(#{STRYPIFY_CMD} --version).strip if result.empty?
+  result = ""
+  3.times do |i|
+    result = %x(#{STRYPIFY_TIMEOUT_PREFIX.join(' ')} #{STRYPIFY_CMD} --version).strip
+    break unless result.empty?
+    sleep(2) if i < 2
+  end
   raise "#{STRYPIFY_CMD} --version produced no output" if result.empty?
   result
 end

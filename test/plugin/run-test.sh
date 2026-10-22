@@ -3,11 +3,13 @@
 echo $PATH
 set -e
 
-# Per-example limit so a hung Strypify launch fails fast instead of stalling CI.
+# Per-example limit so a hang fails instead of stalling CI. It must comfortably exceed the
+# plugin's own per-render timeout and retries (see STRYPIFY_TIMEOUT in strypify-plugin.rb),
+# otherwise it kills asciidoctor before the plugin gets a chance to retry a stalled launch.
 # (macOS runners have no `timeout`, so fall back to running without one there.)
 run_limited() {
     if command -v timeout >/dev/null 2>&1; then
-        timeout 180 "$@"
+        timeout 600 "$@"
     else
         "$@"
     fi

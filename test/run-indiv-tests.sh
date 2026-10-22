@@ -20,8 +20,9 @@ PYTHON=$(command -v python3 || command -v python)
 echo Python: $PYTHON
 
 # Per-attempt limit, so a stalled Strypify launch fails (and is retried) quickly rather than
-# eating minutes of CI time. A normal render takes around 10 seconds.
-STRYPIFY_TIMEOUT=${STRYPIFY_TIMEOUT:-90}
+# eating minutes of CI time. A normal render takes around 10 seconds
+# (up to ~20 for a cold start).
+STRYPIFY_TIMEOUT=${STRYPIFY_TIMEOUT:-40}
 run_limited() {
   if command -v timeout >/dev/null 2>&1; then
     timeout -k 5 "$STRYPIFY_TIMEOUT" "$@"

@@ -140,6 +140,10 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      # Keep Strypify's stderr (with Electron logging) from headless runs, to diagnose stalled launches:
+      STRYPIFY_HEADLESS_LOG_DIR: ${{ github.workspace }}/headless-logs
+      STRYPIFY_HEADLESS_DEBUG: 1
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -219,6 +223,13 @@ jobs:
         ls -lrt "../../${{ matrix.bindir }}/"
         export PATH="$(realpath "../../${{ matrix.bindir }}/"):$PATH"
         bash ./run-test.sh
+    - name: Upload headless Strypify logs
+      if: always() && runner.os == 'Linux'
+      uses: actions/upload-artifact@v4
+      with:
+        name: headless-logs-${{ matrix.name }}
+        path: headless-logs/
+        if-no-files-found: ignore
     - name: Upload plugin output if tests failed
       if: failure()
       uses: actions/upload-artifact@v4
