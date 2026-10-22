@@ -411,6 +411,10 @@ app.on('ready', async () => {
         `);
 
         testWin.webContents.setZoomFactor(zoom);
+        // Newer Electron (42) clamps a window that is bigger than the display (e.g. Xvfb's 1280x1024 screen,
+        // or a laptop screen) to the display size at creation, which narrows the page's viewport and hence the
+        // frames in the image. Setting the size again afterwards restores the intended viewport:
+        testWin.setSize(Math.round(600 * zoom * widthFactor), 1080 * 3);
 
         // Tell it we are Playwright to allow using the <input> file selection:
         await testWin.webContents.executeJavaScript(`window.Playwright = true;`);
