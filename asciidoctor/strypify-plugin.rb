@@ -30,20 +30,23 @@ STRYPIFY_TIMEOUT_SECS = (ENV['STRYPIFY_TIMEOUT'] || '60')
 STRYPIFY_TIMEOUT_PREFIX = (HOST_OS =~ /darwin|mswin|mingw|cygwin/) ? [] : ["timeout", "--signal=KILL", STRYPIFY_TIMEOUT_SECS]
 
 # `--version` has occasionally come back empty on a loaded CI host (its
-# stderr is discarded by strypify-headless.sh, so a transient Xvfb failure
-# is invisible here) -- that silently corrupted every cache filename and
+# stderr was discarded by strypify-headless.sh, so a transient Xvfb failure
+# was invisible) -- that silently corrupted every cache filename and
 # broke the aria-describedby postprocessor regex below for the whole build.
-# Retry once, then fail loudly rather than quietly continuing with "".
+# Retry (up to 3 attempts), then fail loudly rather than quietly continuing with "".
 # The call is also given the timeout, since a stalled launch here would otherwise
-# block the whole build with no output; a stall just counts as an empty result.
+# block the whole build with no output; a stall just counts as an empty result. The error
+# includes stderr, which strypify-headless.sh now keeps for --version.
 VERSION = begin
   result = ""
+  err = ""
   3.times do |i|
-    result = %x(#{STRYPIFY_TIMEOUT_PREFIX.join(' ')} #{STRYPIFY_CMD} --version).strip
+    out, err, _status = Open3.capture3(*STRYPIFY_TIMEOUT_PREFIX, STRYPIFY_CMD, "--version")
+    result = out.strip
     break unless result.empty?
     sleep(2) if i < 2
   end
-  raise "#{STRYPIFY_CMD} --version produced no output" if result.empty?
+  raise "#{STRYPIFY_CMD} --version produced no output (stderr: #{err.strip})" if result.empty?
   result
 end
 

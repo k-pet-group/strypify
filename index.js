@@ -528,8 +528,12 @@ app.on('ready', async () => {
         catch (err) {
             // Windows doesn't support FD 3
         }
+        // Exiting in the same tick as close() races with the window's teardown, and on Linux that
+        // intermittently crashes Electron (a core dump that can then hold the process for minutes),
+        // even though the image has already been written. So wait for the window to actually close.
+        // App exit is forced (unlike app.quit), with a timer as a fallback in case 'closed' never fires.
+        testWin.once("closed", () => app.exit());
+        setTimeout(() => app.exit(), 5000);
         testWin.close();
-        // Exit forces it (unlike app.quit):
-        app.exit();
     });
 });
