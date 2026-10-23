@@ -1,3 +1,5 @@
 node_modules
 strypify-darwin-arm64
 *.png
+# Reference images for the image tests:
+!test/expected/**/*.png

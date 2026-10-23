@@ -15,6 +15,20 @@ if [[ ! -f "$STRYPIFY" ]]; then
     STRYPIFY="${STRYPIFY##*/}"
 fi
 
+# The reference images are captured per platform, as fonts render slightly differently on each:
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    PLATFORM=linux
+elif [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* ]]; then
+    PLATFORM=windows
+else
+    PLATFORM=macos
+fi
+EXPECTED_DIR="expected/$PLATFORM"
+
+# To refresh the references (e.g. after a Strype release changes how things look), run this script with
+# UPDATE_EXPECTED=1: the images it generates then replace the references for this platform, instead of
+# being compared to them. (test/update-expected-from-ci.sh does this for all platforms from a CI run.)
+
 echo Strypify: $STRYPIFY
 PYTHON=$(command -v python3 || command -v python)
 echo Python: $PYTHON
@@ -38,7 +52,7 @@ run_limited() {
 
 for PYFILE in example*.py; do
   echo Testing: $PYFILE
-  EXPECTEDFILE="expected-${PYFILE%.py}.png"
+  EXPECTEDFILE="$EXPECTED_DIR/expected-${PYFILE%.py}.png"
   ACTUALFILE="actual-${PYFILE%.py}.png"
   rm -rf $ACTUALFILE
   # Read command line args if file exists:
@@ -65,12 +79,26 @@ for PYFILE in example*.py; do
     echo "Image $ACTUALFILE does not exist!"
     exit 1
   fi
+  if [ -n "$UPDATE_EXPECTED" ]; then
+    mkdir -p "$EXPECTED_DIR"
+    cp "$ACTUALFILE" "$EXPECTEDFILE"
+    echo "Updated $EXPECTEDFILE"
+    continue
+  fi
+  # Carry on past a failing example, so that every example is reported (and every image generated):
   if [ ! -f "$EXPECTEDFILE" ]; then
-      echo "Image $EXPECTEDFILE does not exist!"
-      exit 1
-    fi
+    echo "Image $EXPECTEDFILE does not exist!"
+    FAILED="$FAILED ${PYFILE%.py}"
+    continue
+  fi
   echo Comparing $ACTUALFILE to $EXPECTEDFILE
   export ACTUALFILE
   export EXPECTEDFILE
-  $PYTHON run-test.py
+  $PYTHON run-test.py || FAILED="$FAILED ${PYFILE%.py}"
 done
+
+if [ -n "$FAILED" ]; then
+  echo "SUMMARY: comparison failed for:$FAILED"
+  exit 1
+fi
+echo "SUMMARY: all comparisons passed"
