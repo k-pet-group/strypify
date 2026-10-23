@@ -3,12 +3,29 @@ const {writeFileSync, writeSync, readFileSync, existsSync, rmSync, mkdtempSync} 
 const crypto = require('crypto');
 const sharp = require('sharp');
 const path = require('path');
+const os = require('os');
 
 // Print version and exit, if they asked for it:
 if (process.argv.includes("--version") || process.argv.includes("-v")) {
     console.log(app.getVersion());
     app.exit(0);
 }
+
+// Use a private profile directory for each run. Otherwise every run shares Electron's default one, so concurrent
+// runs fight over (and clear) each other's browser storage, which can stall the editor, and a run can see
+// state (e.g. an autosaved project) left behind by an earlier one. Must be set before the app is ready.
+const profileDir = mkdtempSync(path.join(os.tmpdir(), 'strypify-profile-'));
+app.setPath('userData', profileDir);
+process.on('exit', () => {
+    // Best effort only: Chromium's helper processes can still hold files in here as we exit (notably on
+    // Windows), and an exception thrown from an exit handler makes Electron show an error dialog that
+    // stops the process from ever exiting.
+    try {
+        rmSync(profileDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch (err) {
+        // Leave it for the OS to clear out of the temp directory.
+    }
+});
 
 // Gets the union of the two rectangles, i.e. the smallest rectangle
 // that includes the full bounds of both the given rectangles.
@@ -292,6 +309,37 @@ app.on('ready', async () => {
         return false; // timeout
     }
 
+    // Polls the given JS expression in the page until it is truthy; returns false on timeout.
+    async function waitForCondition(jsExpr, timeoutMs = 5000, intervalMs = 50) {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            try {
+                if (await testWin.webContents.executeJavaScript(jsExpr)) return true;
+            } catch (err) {
+                // Page may be mid-navigation; just try again
+            }
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        }
+        return false;
+    }
+
+    // True when no dialog (or its backdrop) is showing, e.g. the Load Project dialog has fully gone:
+    const noDialogVisibleJs = `(() => {
+        const vis = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
+            return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none"; };
+        return ![...document.querySelectorAll(".modal, .modal-backdrop")].some(vis) && !document.body.classList.contains("modal-open");
+    })()`;
+
+    // True once the Load Project dialog has opened and finished animating in. Its buttons exist
+    // in the DOM before this (while it is still hidden), and on a loaded machine it can take over a second
+    // to open, so using them earlier loads the file with nothing to close the dialog that then opens late:
+    const loadDialogOpenJs = `(() => {
+        const dlg = document.getElementById('load-strype-project-modal-dlg');
+        if (!dlg || !dlg.classList.contains('show') || dlg.classList.contains('showing')) return false;
+        const r = dlg.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && !!document.getElementById('loadFromFSStrypeButton');
+    })()`;
+
     async function hasFrameDivs(frameContainer) {
         return await testWin.webContents.executeJavaScript(`
             (() => {
@@ -304,8 +352,20 @@ app.on('ready', async () => {
 
 
 
+    // Reports why we gave up, then exits with an error (so the caller can retry):
+    function failAndExit(message) {
+        console.log(message);
+        app.exit(-1);
+    }
+
     await testWin.loadURL(editorURL);
+    // did-stop-loading fires several times as the editor loads (it toggled the loading state 3 times in
+    // testing), and each firing used to start a complete copy of the flow below. Those copies raced: one
+    // could re-open the Load Project dialog while another was capturing, giving an image of the dialog.
+    let flowStarted = false;
     testWin.webContents.on('did-stop-loading', async() => {
+        if (flowStarted) return;
+        flowStarted = true;
         // Set CSS:
         if (navigationCommands == null) {
             // Hide frame cursor:
@@ -411,22 +471,41 @@ app.on('ready', async () => {
         `);
 
         testWin.webContents.setZoomFactor(zoom);
+        // Newer Electron (42) clamps a window that is bigger than the display (e.g. Xvfb's 1280x1024 screen,
+        // or a laptop screen) to the display size at creation, which narrows the page's viewport and hence the
+        // frames in the image. Setting the size again afterwards restores the intended viewport:
+        testWin.setSize(Math.round(600 * zoom * widthFactor), 1080 * 3);
 
         // Tell it we are Playwright to allow using the <input> file selection:
         await testWin.webContents.executeJavaScript(`window.Playwright = true;`);
 
         // Show menu and click load project:
+        // Wait for the editor to have built its menu, and to have set up its initial project (shown as frames),
+        // before using it: on a loaded machine a click made before then can be ignored.
+        await waitForCondition(`!!document.getElementById('showHideMenu')`, 10000);
+        await waitForCondition(`document.querySelector('.frame-div') !== null`, 20000);
         await testWin.webContents.executeJavaScript(`
           document.getElementById('showHideMenu')?.click();
         `);
         await new Promise(resolve => setTimeout(resolve, 500));
-        await testWin.webContents.executeJavaScript(`
-          document.getElementById('loadProjectLink')?.click();
-        `);
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await waitForCondition(`!!document.getElementById('loadProjectLink')`);
+        // The dialog opens only after the editor has asynchronously read its saved states, so allow time for it
+        // to appear, but click the link again if it hasn't, in case the click was ignored:
+        let dialogOpen = false;
+        for (let attempt = 1; attempt <= 3 && !dialogOpen; attempt++) {
+            await testWin.webContents.executeJavaScript(`
+              document.getElementById('loadProjectLink')?.click();
+            `);
+            await new Promise(resolve => setTimeout(resolve, 200));
+            dialogOpen = await waitForCondition(loadDialogOpenJs, 6000);
+        }
+        if (!dialogOpen) {
+            return failAndExit('Timed out waiting for Load Project dialog to open');
+        }
         await testWin.webContents.executeJavaScript(`
           document.getElementById('loadFromFSStrypeButton')?.click();
         `);
+        await waitForCondition(`!!document.getElementById('importFileInput')`);
 
         // Uses handler in preload.js:
         try {
@@ -438,9 +517,15 @@ app.on('ready', async () => {
         // Wait until Saved indicator shows:
         const saved = await waitForSavedLabel();
         if (!saved) {
-            console.log('Timed out waiting for project load');
-            app.exit(-1);
+            return failAndExit('Timed out waiting for project load');
         }
+        // Wait for the Load Project dialog to have gone completely, then a little longer for the
+        // page to repaint without it, before measuring or capturing anything:
+        if (!await waitForCondition(noDialogVisibleJs, 15000)) {
+            // Better to fail (and be retried) than to capture the dialog:
+            return failAndExit('Timed out waiting for Load Project dialog to close');
+        }
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         if (navigationCommands != null) {
             for (let key of navigationCommands) {

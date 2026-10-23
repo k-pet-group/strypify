@@ -15,6 +15,13 @@ if [[ ! -f "$STRYPIFY" ]]; then
     STRYPIFY="${STRYPIFY##*/}"
 fi
 
+# The reference images are renders from Linux. Layout is the same on every OS, but fonts are rasterised
+# differently, so run-test.py compares more loosely on Windows and macOS.
+#
+# To refresh the references (e.g. after a Strype release changes how things look), run this script on Linux with
+# UPDATE_EXPECTED=1: the images it generates then replace the references, instead of being compared to them.
+# (test/update-expected-from-ci.sh does this from a CI run.)
+
 echo Strypify: $STRYPIFY
 PYTHON=$(command -v python3 || command -v python)
 echo Python: $PYTHON
@@ -28,6 +35,9 @@ run_limited() {
     timeout -k 5 "$STRYPIFY_TIMEOUT" "$@"
   elif command -v gtimeout >/dev/null 2>&1; then
     gtimeout -k 5 "$STRYPIFY_TIMEOUT" "$@"
+  elif command -v perl >/dev/null 2>&1; then
+    # macOS has no timeout command, but has perl:
+    perl -e 'alarm shift; exec @ARGV' "$STRYPIFY_TIMEOUT" "$@"
   else
     "$@"
   fi
@@ -62,12 +72,29 @@ for PYFILE in example*.py; do
     echo "Image $ACTUALFILE does not exist!"
     exit 1
   fi
-  if [ ! -f "$EXPECTEDFILE" ]; then
-      echo "Image $EXPECTEDFILE does not exist!"
+  if [ -n "$UPDATE_EXPECTED" ]; then
+    if [[ "$OSTYPE" != "linux-gnu"* ]]; then
+      echo "The references must be Linux renders; run with UPDATE_EXPECTED on Linux" >&2
       exit 1
     fi
+    cp "$ACTUALFILE" "$EXPECTEDFILE"
+    echo "Updated $EXPECTEDFILE"
+    continue
+  fi
+  # Carry on past a failing example, so that every example is reported (and every image generated):
+  if [ ! -f "$EXPECTEDFILE" ]; then
+    echo "Image $EXPECTEDFILE does not exist!"
+    FAILED="$FAILED ${PYFILE%.py}"
+    continue
+  fi
   echo Comparing $ACTUALFILE to $EXPECTEDFILE
   export ACTUALFILE
   export EXPECTEDFILE
-  $PYTHON run-test.py
+  $PYTHON run-test.py || FAILED="$FAILED ${PYFILE%.py}"
 done
+
+if [ -n "$FAILED" ]; then
+  echo "SUMMARY: comparison failed for:$FAILED"
+  exit 1
+fi
+echo "SUMMARY: all comparisons passed"

@@ -10,6 +10,9 @@ set -e
 run_limited() {
     if command -v timeout >/dev/null 2>&1; then
         timeout 600 "$@"
+    elif command -v perl >/dev/null 2>&1; then
+        # macOS has no timeout command, but has perl:
+        perl -e 'alarm shift; exec @ARGV' 600 "$@"
     else
         "$@"
     fi

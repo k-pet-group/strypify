@@ -178,23 +178,23 @@ jobs:
     - name: Install Python packages
       run: |
         python3 -m pip install --upgrade pip || python -m pip install --upgrade pip
-        python3 -m pip install Pillow imagehash || python -m pip install Pillow imagehash
+        python3 -m pip install Pillow || python -m pip install Pillow
 
-    # The reference images are renders from one platform, so the pixel comparison is Linux-only.
-    # (The plugin test below compares HTML, so runs everywhere.)
     - name: Run Strypify and check image
-      if: runner.os == 'Linux'
       working-directory: test
       run: |
         ls -lrt "../${{ matrix.bindir }}/"
         export PATH="$(realpath "../${{ matrix.bindir }}/"):$PATH"
         bash ./run-indiv-tests.sh
-    - name: Upload generated images if tests failed
-      if: failure() && runner.os == 'Linux'  # only runs if previous step failed
+    # Kept on every run (not just failures), as these are what test/update-expected-from-ci.sh uses to refresh the
+    # reference images when a Strype release changes how things look:
+    - name: Upload generated images
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: failed-images-${{ matrix.name }}
+        name: images-${{ matrix.name }}
         path: 'test/actual-*.png'
+        retention-days: 30
 
     - name: Install dependencies for plugin test (Linux)
       if: runner.os == 'Linux'
