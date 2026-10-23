@@ -15,19 +15,12 @@ if [[ ! -f "$STRYPIFY" ]]; then
     STRYPIFY="${STRYPIFY##*/}"
 fi
 
-# The reference images are captured per platform, as fonts render slightly differently on each:
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    PLATFORM=linux
-elif [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* ]]; then
-    PLATFORM=windows
-else
-    PLATFORM=macos
-fi
-EXPECTED_DIR="expected/$PLATFORM"
-
-# To refresh the references (e.g. after a Strype release changes how things look), run this script with
-# UPDATE_EXPECTED=1: the images it generates then replace the references for this platform, instead of
-# being compared to them. (test/update-expected-from-ci.sh does this for all platforms from a CI run.)
+# The reference images are renders from Linux. Layout is the same on every OS, but fonts are rasterised
+# differently, so run-test.py compares more loosely on Windows and macOS.
+#
+# To refresh the references (e.g. after a Strype release changes how things look), run this script on Linux with
+# UPDATE_EXPECTED=1: the images it generates then replace the references, instead of being compared to them.
+# (test/update-expected-from-ci.sh does this from a CI run.)
 
 echo Strypify: $STRYPIFY
 PYTHON=$(command -v python3 || command -v python)
@@ -52,7 +45,7 @@ run_limited() {
 
 for PYFILE in example*.py; do
   echo Testing: $PYFILE
-  EXPECTEDFILE="$EXPECTED_DIR/expected-${PYFILE%.py}.png"
+  EXPECTEDFILE="expected-${PYFILE%.py}.png"
   ACTUALFILE="actual-${PYFILE%.py}.png"
   rm -rf $ACTUALFILE
   # Read command line args if file exists:
@@ -80,7 +73,10 @@ for PYFILE in example*.py; do
     exit 1
   fi
   if [ -n "$UPDATE_EXPECTED" ]; then
-    mkdir -p "$EXPECTED_DIR"
+    if [[ "$OSTYPE" != "linux-gnu"* ]]; then
+      echo "The references must be Linux renders; run with UPDATE_EXPECTED on Linux" >&2
+      exit 1
+    fi
     cp "$ACTUALFILE" "$EXPECTEDFILE"
     echo "Updated $EXPECTEDFILE"
     continue
