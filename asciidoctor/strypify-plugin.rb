@@ -32,7 +32,7 @@ STRYPIFY_TIMEOUT_PREFIX = (HOST_OS =~ /darwin|mswin|mingw|cygwin/) ? [] : ["time
 # `--version` has occasionally come back empty on a loaded CI host (its
 # stderr was discarded by strypify-headless.sh, so a transient Xvfb failure
 # was invisible) -- that silently corrupted every cache filename and
-# broke the aria-describedby postprocessor regex below for the whole build.
+# corrupted every cache filename for the whole build.
 # Retry (up to 3 attempts), then fail loudly rather than quietly continuing with "".
 # The call is also given the timeout, since a stalled launch here would otherwise
 # block the whole build with no output; a stall just counts as an empty result. The error
@@ -56,7 +56,7 @@ end
 # by cloning the original document's attributes without overriding
 # 'backend'). So a plain `backend == 'html5'` check -- true for a normal
 # HTML5 build -- is false throughout a multipage build, which silently
-# skipped both the hidden code div and the aria-describedby attribute.
+# skipped the hidden code div.
 # Matching on the 'html5' suffix catches both backends (and any other
 # html5-derived backend) without needing to special-case multipage.
 def is_html5_backend?(backend)
@@ -169,7 +169,9 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
                    # Count path components and prepend that many ".."
                    images_dir.split('/').map { '..' }.join('/') + '/' + relativeFilename
                  end
-    imgAttr["alt"] = "Strype code" unless imgAttr.key?("alt")
+    # The code itself follows the image as visually-hidden text (below), so the image
+    # just needs to say what it is.
+    imgAttr["alt"] = "Screenshot of the code below" unless imgAttr.key?("alt")
 
 
     if not File.file?(localFilename)
@@ -259,7 +261,7 @@ class StrypeSyntaxHighlighter < Asciidoctor::Extensions::BlockProcessor
 
     desc = nil
     if is_html5_backend?(parent.document.backend)
-      code = src.gsub(/load_image\("data:[^"]+"\)/, "image_literal")
+      code = src.gsub(/load_image\("data:[^"]+"\)/, "image_literal").gsub("___strype_blank", "blank") # read as "strype blank" by screen readers otherwise
       # The style below makes a "physically invisible" element that will still show up for
       # screen readers to take notice of (they ignore hidden elements or display:none, etc)
       html = <<~HTML
@@ -287,28 +289,4 @@ end
 
 Asciidoctor::Extensions.register do
   block StrypeSyntaxHighlighter, :strype
-
-  postprocessor do
-      process do |doc, output|
-        next output unless is_html5_backend?(doc.backend)
-
-        # The segment between "strype-strypify" and "-<hash>.png" is the
-        # Strypify VERSION string embedded in the cache filename -- normally
-        # non-empty (e.g. "1.3.6"), but VERSION silently becomes "" if the
-        # `#{STRYPIFY_CMD} --version` check fails (its stderr is discarded,
-        # so a transient failure, e.g. an Xvfb hiccup on a long-running CI
-        # host, has no visible error). That previously made this `[^"]+`
-        # require a character that doesn't exist, so the whole regex failed
-        # to match *every* image on the page and no aria-describedby was
-        # added at all. Use `[^"]*` so an empty VERSION still matches.
-        output.gsub(/<img[^>]*src="[^"]+strype-strypify[^"]*-([0-9a-z]+)\.png"[^>]*>/) do |img|
-          md5 = Regexp.last_match(1)
-          if img.include? 'aria-describedby='
-            img
-          else
-            img.sub(/>$/, " aria-describedby=\"fullcode-#{md5}\">")
-          end
-        end
-      end
-    end
 end
