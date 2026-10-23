@@ -6,8 +6,7 @@ const path = require('path');
 const os = require('os');
 
 // Print version and exit, if they asked for it:
-const versionRequested = process.argv.includes("--version") || process.argv.includes("-v");
-if (versionRequested) {
+if (process.argv.includes("--version") || process.argv.includes("-v")) {
     console.log(app.getVersion());
     app.exit(0);
 }
@@ -15,20 +14,18 @@ if (versionRequested) {
 // Use a private profile directory for each run. Otherwise every run shares Electron's default one, so concurrent
 // runs fight over (and clear) each other's browser storage, which can stall the editor, and a run can see
 // state (e.g. an autosaved project) left behind by an earlier one. Must be set before the app is ready.
-if (!versionRequested) {
-    const profileDir = mkdtempSync(path.join(os.tmpdir(), 'strypify-profile-'));
-    app.setPath('userData', profileDir);
-    process.on('exit', () => {
-        // Best effort only: Chromium's helper processes can still hold files in here as we exit (notably on
-        // Windows), and an exception thrown from an exit handler makes Electron show an error dialog that
-        // stops the process from ever exiting.
-        try {
-            rmSync(profileDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-        } catch (err) {
-            // Leave it for the OS to clear out of the temp directory.
-        }
-    });
-}
+const profileDir = mkdtempSync(path.join(os.tmpdir(), 'strypify-profile-'));
+app.setPath('userData', profileDir);
+process.on('exit', () => {
+    // Best effort only: Chromium's helper processes can still hold files in here as we exit (notably on
+    // Windows), and an exception thrown from an exit handler makes Electron show an error dialog that
+    // stops the process from ever exiting.
+    try {
+        rmSync(profileDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch (err) {
+        // Leave it for the OS to clear out of the temp directory.
+    }
+});
 
 // Gets the union of the two rectangles, i.e. the smallest rectangle
 // that includes the full bounds of both the given rectangles.
