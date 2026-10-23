@@ -189,6 +189,11 @@ jobs:
         python3 -m pip install --upgrade pip || python -m pip install --upgrade pip
         python3 -m pip install Pillow || python -m pip install Pillow
 
+    # Uses stand-ins for Strypify, so it checks the script's handling of a Strypify that hangs, not the binary:
+    - name: Test how the headless script handles --version
+      if: runner.os == 'Linux'
+      run: bash test/test-headless-version.sh
+
     - name: Run Strypify and check image
       working-directory: test
       run: |
