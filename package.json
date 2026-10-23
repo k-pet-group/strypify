@@ -17,6 +17,6 @@
     "electron": "^42.11.18"
   },
   "dependencies": {
-    "sharp": "^0.34.4"
+    "sharp": "^0.35.5"
   }
 }
