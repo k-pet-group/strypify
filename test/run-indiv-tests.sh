@@ -43,6 +43,20 @@ run_limited() {
   fi
 }
 
+# --version must print the version every time (the Asciidoctor plugin runs it when it loads, and fails the whole
+# build if it comes back empty), so check it a few times, against the version in package.json:
+EXPECTED_VERSION=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' ../package.json)
+for ATTEMPT in 1 2 3 4 5; do
+  VERSION_START=$SECONDS
+  # (On Windows, the output starts with a blank line and has \r\n line ends; the plugin strips these too.)
+  ACTUAL_VERSION=$(run_limited $STRYPIFY --version 2>/dev/null | tr -d '\r' | grep -v '^$' | tail -1)
+  if [ "$ACTUAL_VERSION" != "$EXPECTED_VERSION" ]; then
+    echo "--version attempt $ATTEMPT printed [$ACTUAL_VERSION] after $((SECONDS - VERSION_START))s, expected [$EXPECTED_VERSION]"
+    exit 1
+  fi
+done
+echo "--version prints $EXPECTED_VERSION (5 runs)"
+
 for PYFILE in example*.py; do
   echo Testing: $PYFILE
   EXPECTEDFILE="expected-${PYFILE%.py}.png"

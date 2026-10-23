@@ -1,18 +1,51 @@
 #! /bin/bash
 
 # The normal path discards all of Strypify's stdout/stderr (the result is passed back on fd 3),
-# but --version prints its result on stdout, so let that one through. Its stderr is kept and shown
-# if the run fails or prints nothing, so that a failure is diagnosable rather than silent.
+# but --version prints its result on stdout, so let that one through.
+#
+# Strypify prints the version at once, but can then hang or crash while exiting (a core dump can hold it for
+# minutes). If we waited for the exit, the caller's timeout would kill this script before it passed on the
+# version it already had, which showed up as "produced no output" with nothing on stderr. So, as for a render
+# below, once the version is there give the process a few seconds to exit, and then stop it. And if it never
+# prints anything, give up after STRYPIFY_VERSION_TIMEOUT seconds (which has to be less than the caller's own
+# timeout) and show its stderr, so that the failure is diagnosable rather than silent.
 case " $* " in
   *" --version "*|*" -v "*)
+    VOUT_FILE=$(mktemp)
     VERR=$(mktemp)
-    VOUT=$(xvfb-run --auto-servernum Strypify $* --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage --headless --disable-features=UseOzonePlatform --use-gl=swiftshader --force-color-profile=srgb 2>"$VERR" </dev/null)
+    setsid xvfb-run --auto-servernum Strypify $* --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage --headless --disable-features=UseOzonePlatform --use-gl=swiftshader --force-color-profile=srgb >"$VOUT_FILE" 2>"$VERR" </dev/null &
+    PID=$!
+    START=$SECONDS
+    TICKS=0
+    STOPPED=
+    while kill -0 $PID 2>/dev/null; do
+      if [ -s "$VOUT_FILE" ]; then
+        TICKS=$((TICKS + 1))
+        if [ "$TICKS" -ge 30 ]; then
+          STOPPED="version printed but Strypify had not exited after 3s; stopped it"
+          break
+        fi
+      elif [ $((SECONDS - START)) -ge "${STRYPIFY_VERSION_TIMEOUT:-40}" ]; then
+        STOPPED="no output after ${STRYPIFY_VERSION_TIMEOUT:-40}s; stopped it"
+        break
+      fi
+      sleep 0.1
+    done
+    if [ -n "$STOPPED" ]; then
+      kill -TERM -- -$PID 2>/dev/null
+      sleep 1
+      kill -KILL -- -$PID 2>/dev/null
+    fi
+    wait $PID 2>/dev/null
     VRC=$?
+    VOUT=$(cat "$VOUT_FILE")
+    # Stopping it after the version was printed is not a failure:
+    [ -n "$STOPPED" ] && [ -n "$VOUT" ] && VRC=0
     if [ "$VRC" -ne 0 ] || [ -z "$VOUT" ]; then
-      echo "strypify-headless: --version exit code $VRC, output [$VOUT]; stderr follows:" >&2
+      echo "strypify-headless: --version exit code $VRC, output [$VOUT]${STOPPED:+ ($STOPPED)}; stderr follows:" >&2
       cat "$VERR" >&2
     fi
-    rm -f "$VERR"
+    rm -f "$VOUT_FILE" "$VERR"
     [ -n "$VOUT" ] && printf '%s\n' "$VOUT"
     exit $VRC
     ;;
