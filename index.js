@@ -19,7 +19,14 @@ if (!versionRequested) {
     const profileDir = mkdtempSync(path.join(os.tmpdir(), 'strypify-profile-'));
     app.setPath('userData', profileDir);
     process.on('exit', () => {
-        rmSync(profileDir, { recursive: true, force: true });
+        // Best effort only: Chromium's helper processes can still hold files in here as we exit (notably on
+        // Windows), and an exception thrown from an exit handler makes Electron show an error dialog that
+        // stops the process from ever exiting.
+        try {
+            rmSync(profileDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+        } catch (err) {
+            // Leave it for the OS to clear out of the temp directory.
+        }
     });
 }
 

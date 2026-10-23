@@ -28,6 +28,9 @@ run_limited() {
     timeout -k 5 "$STRYPIFY_TIMEOUT" "$@"
   elif command -v gtimeout >/dev/null 2>&1; then
     gtimeout -k 5 "$STRYPIFY_TIMEOUT" "$@"
+  elif command -v perl >/dev/null 2>&1; then
+    # macOS has no timeout command, but has perl:
+    perl -e 'alarm shift; exec @ARGV' "$STRYPIFY_TIMEOUT" "$@"
   else
     "$@"
   fi
