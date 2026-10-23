@@ -8,7 +8,7 @@ expected = os.environ['EXPECTEDFILE']
 h1 = imagehash.phash(Image.open(expected))
 h2 = imagehash.phash(Image.open(actual))
 
-print("Hamming distance:", h1 - h2)
+print("Hamming distance:", h1 - h2, "sizes actual/expected:", Image.open(actual).size, Image.open(expected).size)
 
 if (h1 - h2) < 25:
     print(f"Images are nearly identical {h1 - h2}")
